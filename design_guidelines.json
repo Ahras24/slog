@@ -1,0 +1,372 @@
+{
+  "theme": "light",
+  "design_archetype": "Swiss & High-Contrast with Navy SaaS Precision",
+  "typography": {
+    "font_imports": [
+      "@import \"@fontsource-variable/plus-jakarta-sans\";",
+      "@import \"@fontsource/poppins\";",
+      "@import \"@fontsource-variable/lora\";"
+    ],
+    "heading_font": "'Plus Jakarta Sans Variable', sans-serif",
+    "body_font": "'Plus Jakarta Sans Variable', sans-serif",
+    "invoice_heading_font": "'Poppins', sans-serif",
+    "invoice_body_font": "'Poppins', sans-serif",
+    "invoice_serif_font": "'Lora Variable', serif",
+    "mono_font": "'JetBrains Mono Variable', monospace",
+    "scale_px": {
+      "display": 36,
+      "h1": 30,
+      "h2": 24,
+      "h3": 20,
+      "h4": 18,
+      "body": 14,
+      "caption": 12
+    },
+    "hierarchy_rules": {
+      "page_title": "text-2xl font-bold tracking-tight text-slate-900",
+      "section_title": "text-lg font-semibold tracking-tight text-slate-900",
+      "metric_label": "text-xs font-medium uppercase tracking-wider text-slate-500",
+      "metric_value": "text-2xl font-bold tracking-tight text-slate-900",
+      "table_header": "text-xs font-semibold uppercase tracking-wider text-slate-500",
+      "table_cell": "text-sm text-slate-700",
+      "table_cell_code": "text-xs font-mono font-medium text-slate-500",
+      "badge_text": "text-xs font-semibold",
+      "invoice_wordmark": "text-2xl font-black uppercase tracking-widest text-slate-950",
+      "invoice_serif_thankyou": "text-base font-serif italic text-slate-800"
+    }
+  },
+  "colors": {
+    "accent": "#0F2942",
+    "accent_hover": "#163A5C",
+    "on_accent": "#FFFFFF",
+    "surfaces": [
+      {
+        "name": "page",
+        "kind": "solid",
+        "bg": "#F8FAFC",
+        "on_bg": "#0F172A",
+        "on_bg_muted": "#64748B",
+        "roles": {
+          "border": "#E2E8F0",
+          "link": "#0F2942"
+        }
+      },
+      {
+        "name": "sidebar",
+        "kind": "solid",
+        "bg": "#FFFFFF",
+        "on_bg": "#0F172A",
+        "on_bg_muted": "#64748B",
+        "roles": {
+          "active_bg": "#F1F5F9",
+          "active_indicator": "#0F2942",
+          "hover_bg": "#F8FAFC",
+          "border": "#E2E8F0"
+        }
+      },
+      {
+        "name": "card",
+        "kind": "solid",
+        "bg": "#FFFFFF",
+        "on_bg": "#0F172A",
+        "on_bg_muted": "#64748B",
+        "roles": {
+          "border": "#E2E8F0",
+          "shadow": "0 1px 3px 0 rgba(15, 23, 42, 0.05), 0 1px 2px -1px rgba(15, 23, 42, 0.05)"
+        }
+      },
+      {
+        "name": "modal_dialog",
+        "kind": "solid",
+        "bg": "#FFFFFF",
+        "on_bg": "#0F172A",
+        "on_bg_muted": "#64748B",
+        "roles": {
+          "border": "#CBD5E1",
+          "overlay": "rgba(15, 23, 42, 0.45)"
+        }
+      },
+      {
+        "name": "badge_in_stock",
+        "kind": "solid",
+        "bg": "#ECFDF5",
+        "on_bg": "#065F46",
+        "on_bg_muted": "#047857",
+        "roles": {
+          "border": "#A7F3D0"
+        }
+      },
+      {
+        "name": "badge_low_stock",
+        "kind": "solid",
+        "bg": "#FFFBEB",
+        "on_bg": "#92400E",
+        "on_bg_muted": "#B45309",
+        "roles": {
+          "border": "#FDE68A"
+        }
+      },
+      {
+        "name": "badge_out_of_stock",
+        "kind": "solid",
+        "bg": "#FEF2F2",
+        "on_bg": "#991B1B",
+        "on_bg_muted": "#DC2626",
+        "roles": {
+          "border": "#FECACA"
+        }
+      },
+      {
+        "name": "invoice_sheet",
+        "kind": "solid",
+        "bg": "#FFFFFF",
+        "on_bg": "#111827",
+        "on_bg_muted": "#6B7280",
+        "roles": {
+          "border_table": "#D1D5DB",
+          "light_beige_chip": "#F4EFE6",
+          "light_beige_chip_text": "#1F2937",
+          "light_beige_table_head": "#F7F3EB",
+          "light_beige_total_box": "#F4EFE6",
+          "light_beige_total_text": "#111827",
+          "thin_rule": "#E5E7EB"
+        }
+      }
+    ]
+  },
+  "entry_surfaces": {
+    "/": "internal admin split shell — clean left sidebar with nav and store badge, main content with 6 summary metric cards, filter toolbar, and full stock table"
+  },
+  "layouts": {
+    "shell": {
+      "type": "sidebar_and_content",
+      "sidebar_width": "w-64",
+      "mobile_sidebar": "Slide-out sheet on mobile viewports (<1024px)",
+      "header_height": "h-16",
+      "padding": "p-6 sm:p-8",
+      "max_content_width": "max-w-7xl mx-auto"
+    },
+    "grid_metric_cards": {
+      "pattern": "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8",
+      "card_classes": "bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col justify-between"
+    },
+    "table_container": {
+      "wrapper": "bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden",
+      "filter_bar": "p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50"
+    }
+  },
+  "invoice_print_specification": {
+    "reference_match": "Strictly faithful to user's reference invoice image",
+    "page_size": "A4 portrait (210mm x 297mm)",
+    "margins": "18mm",
+    "fonts": {
+      "title": "'Poppins', sans-serif, 900 weight, uppercase",
+      "body": "'Poppins', sans-serif",
+      "thank_you_serif": "'Lora Variable', serif, italic"
+    },
+    "exact_colors": {
+      "beige_tint": "#F4EFE6",
+      "table_header_bg": "#F7F3EB",
+      "primary_text": "#111827",
+      "secondary_text": "#6B7280",
+      "border_lines": "#E5E7EB",
+      "table_grid_lines": "#D1D5DB"
+    },
+    "structure": {
+      "top_row": {
+        "left": "Small-ish bold uppercase 'INVOICE' wordmark (not oversized, tracking-widest)",
+        "right": "Light-beige rounded rectangle pill chip with 'Invoice No.' label & bold number (e.g. INV-0001), followed below by bold formatted date"
+      },
+      "issued_to_block": {
+        "label": "'Issued to:' in bold text-xs tracking-wider uppercase text-slate-500 mb-1",
+        "lines": "[Customer Name], [Company Name], [Street Address], [City, Pincode], [Phone Number], [Email Address]"
+      },
+      "product_table": {
+        "header_bg": "#F7F3EB",
+        "columns": ["Product", "Code", "Qty", "Unit Price (₹)", "Total (₹)"],
+        "column_alignments": {
+          "Product": "text-left font-medium",
+          "Code": "text-left text-slate-500 font-mono text-xs",
+          "Qty": "text-center font-medium",
+          "Unit Price (₹)": "text-right font-medium",
+          "Total (₹)": "text-right font-semibold"
+        },
+        "styling": "Thin horizontal borders between rows, clear vertical borders between columns"
+      },
+      "totals_block": {
+        "alignment": "Right-aligned stack below product table",
+        "rows": [
+          "Sub total: ₹[Amount]",
+          "Round-Off: ±₹[Amount] (rendered conditionally if non-zero)",
+          "Discount: - ₹[Amount] (if applied)",
+          "TOTAL: light-beige rounded box with bold 'TOTAL:' and large bold total amount"
+        ]
+      },
+      "footer": {
+        "top_rule": "Thin horizontal divider",
+        "serif_text": "'Thank You For Your Business' in elegant serif (Lora/Playfair)",
+        "contact_text": "'If you have any questions about this invoice. Please Contact: ' with bold store phone number",
+        "omissions": "NO footer payment info, NO bank info, NO GSTIN, NO due date as requested"
+      }
+    },
+    "print_css": "@media print { body * { visibility: hidden; } #invoice-printable, #invoice-printable * { visibility: visible; } #invoice-printable { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 18mm; background: white !important; } nav, aside, button, .no-print { display: none !important; } }"
+  },
+  "component_specifications": {
+    "sidebar": {
+      "component_path": "@/components/layout/Sidebar.tsx",
+      "items": [
+        {"name": "Dashboard", "path": "/", "icon": "LayoutDashboard"},
+        {"name": "Products & Stock", "path": "/products", "icon": "Package"},
+        {"name": "Create Invoice", "path": "/invoices/new", "icon": "FilePlus"},
+        {"name": "Invoice History", "path": "/invoices", "icon": "History"},
+        {"name": "Store Settings", "path": "/settings", "icon": "Settings"}
+      ]
+    },
+    "summary_metrics": {
+      "component_path": "@/components/dashboard/SummaryCards.tsx",
+      "cards": [
+        {"id": "total_products", "label": "Total Products", "icon": "Package", "color": "text-slate-700"},
+        {"id": "total_stock", "label": "Total Stock Units", "icon": "Layers", "color": "text-slate-700"},
+        {"id": "low_stock", "label": "Low Stock Items", "icon": "AlertTriangle", "color": "text-amber-600"},
+        {"id": "out_of_stock", "label": "Out of Stock", "icon": "AlertOctagon", "color": "text-rose-600"},
+        {"id": "today_sales", "label": "Today's Sales (₹)", "icon": "IndianRupee", "color": "text-emerald-700"},
+        {"id": "today_invoices", "label": "Today's Invoices", "icon": "Receipt", "color": "text-slate-700"}
+      ]
+    },
+    "stock_table": {
+      "component_path": "@/components/products/StockTable.tsx",
+      "columns": ["Product", "Code", "Stock", "Unit Price", "Status", "Actions"],
+      "filters": ["All", "In Stock (>10)", "Low Stock (1-10)", "Out of Stock (0)"],
+      "search": "Live search by product name or sku/code"
+    },
+    "modals": {
+      "add_product": "@/components/products/AddProductModal.tsx",
+      "edit_product": "@/components/products/EditProductModal.tsx",
+      "add_stock": "@/components/products/AddStockModal.tsx",
+      "delete_confirm": "@/components/products/DeleteProductDialog.tsx",
+      "invoice_preview_modal": "@/components/invoices/InvoicePreviewModal.tsx"
+    },
+    "invoice_builder": {
+      "component_path": "@/components/invoices/CreateInvoiceForm.tsx",
+      "features": [
+        "Issued to form (Name, Company, Address, City+Pincode, Phone, Email)",
+        "Auto-generated sequential Invoice No (e.g. INV-0003)",
+        "Product selector dropdown / search with auto-filling Code and Unit Price",
+        "Quantity input with real-time stock validation check",
+        "Insufficient stock inline warning banner ('Insufficient stock available. Max: X')",
+        "Add / Remove line items dynamically",
+        "Live calculation of Subtotal, Editable Discount (₹), Grand Total",
+        "Stock is deducted safely only upon invoice finalization"
+      ]
+    }
+  },
+  "seed_data_blueprint": {
+    "store_settings": {
+      "store_name": "VOGUE TEXTILES WHOLESALE",
+      "phone": "+91 97313 66545",
+      "email": "orders@voguetextiles.in",
+      "address": "48/2 Commercial Street, Textile Market",
+      "city_pincode": "Bengaluru, Karnataka - 560001",
+      "currency_symbol": "₹"
+    },
+    "sample_products": [
+      {"name": "Premium Cotton Oxford Shirt (Men)", "code": "SHIRT-OXF-01", "stock": 140, "unit_price": 650, "status": "In Stock"},
+      {"name": "Linen Casual Slim-Fit Trousers", "code": "TRS-LIN-04", "stock": 48, "unit_price": 820, "status": "In Stock"},
+      {"name": "Pure Mulmul Handblock Kurti", "code": "KRT-MUL-12", "stock": 8, "unit_price": 540, "status": "Low Stock"},
+      {"name": "Heavyweight French Terry Hoodie", "code": "HD-FT-08", "stock": 25, "unit_price": 1150, "status": "In Stock"},
+      {"name": "Denim Relaxed Fit Jeans (Indigo)", "code": "DNM-RLX-02", "stock": 4, "unit_price": 980, "status": "Low Stock"},
+      {"name": "Chanderi Silk Embroidered Dupatta", "code": "DPT-CHD-09", "stock": 0, "unit_price": 420, "status": "Out of Stock"},
+      {"name": "Organic Cotton Crewneck T-Shirt (Pack of 3)", "code": "TSH-ORG-03", "stock": 95, "unit_price": 790, "status": "In Stock"},
+      {"name": "Silk Blend Formal Blazer", "code": "BLZ-SLK-15", "stock": 0, "unit_price": 2850, "status": "Out of Stock"}
+    ],
+    "sample_invoices": [
+      {
+        "invoice_number": "INV-0001",
+        "date": "02 August 2026",
+        "customer": {
+          "name": "Rajesh Kumar",
+          "company": "Metro Retailers Hub",
+          "address": "Shop #14, Fashion Avenue",
+          "city_pincode": "Hyderabad, Telangana - 500001",
+          "phone": "+91 98450 12345",
+          "email": "metro.orders@gmail.com"
+        },
+        "items": [
+          {"product_name": "Premium Cotton Oxford Shirt (Men)", "code": "SHIRT-OXF-01", "qty": 20, "unit_price": 650, "total": 13000},
+          {"product_name": "Linen Casual Slim-Fit Trousers", "code": "TRS-LIN-04", "qty": 10, "unit_price": 820, "total": 8200}
+        ],
+        "subtotal": 21200,
+        "discount": 500,
+        "grand_total": 20700,
+        "status": "Paid"
+      },
+      {
+        "invoice_number": "INV-0002",
+        "date": "03 August 2026",
+        "customer": {
+          "name": "Ananya Sharma",
+          "company": "Elegance Boutique",
+          "address": "22 Brigade Road",
+          "city_pincode": "Bengaluru, Karnataka - 560025",
+          "phone": "+91 99801 88776",
+          "email": "ananya@eleganceboutique.com"
+        },
+        "items": [
+          {"product_name": "Organic Cotton Crewneck T-Shirt (Pack of 3)", "code": "TSH-ORG-03", "qty": 15, "unit_price": 790, "total": 11850},
+          {"product_name": "Heavyweight French Terry Hoodie", "code": "HD-FT-08", "qty": 10, "unit_price": 1150, "total": 11500}
+        ],
+        "subtotal": 23350,
+        "discount": 850,
+        "grand_total": 22500,
+        "status": "Paid"
+      }
+    ]
+  },
+  "motion_and_interactions": {
+    "philosophy": "Subtle, utility-first micro-interactions only. Zero distracting flashy effects.",
+    "hover_transitions": "transition-colors duration-150 ease-in-out",
+    "modals": "Fade-in backdrop and smooth scale-in dialog (150ms ease-out)",
+    "toasts": "Sonner bottom-right rich colors for instant confirmation upon stock update or invoice generation",
+    "skeletons": "Pulsing slate-100/200 rectangular blocks for loading states in metric cards and table rows"
+  },
+  "accessibility_and_testing": {
+    "contrast_standard": "WCAG AA (4.5:1 minimum on all text, 3:1 on large headings and borders)",
+    "testing_attributes": "All interactive elements (buttons, inputs, links, select triggers, table actions) MUST include explicit data-testid attributes",
+    "test_id_examples": [
+      "data-testid=\"nav-dashboard\"",
+      "data-testid=\"nav-products\"",
+      "data-testid=\"nav-create-invoice\"",
+      "data-testid=\"nav-invoices-history\"",
+      "data-testid=\"nav-settings\"",
+      "data-testid=\"metric-total-products\"",
+      "data-testid=\"metric-low-stock\"",
+      "data-testid=\"metric-out-of-stock\"",
+      "data-testid=\"stock-search-input\"",
+      "data-testid=\"filter-tab-low-stock\"",
+      "data-testid=\"add-product-btn\"",
+      "data-testid=\"add-stock-btn-{code}\"",
+      "data-testid=\"edit-product-btn-{code}\"",
+      "data-testid=\"delete-product-btn-{code}\"",
+      "data-testid=\"invoice-customer-name-input\"",
+      "data-testid=\"invoice-item-select-0\"",
+      "data-testid=\"invoice-item-qty-0\"",
+      "data-testid=\"invoice-discount-input\"",
+      "data-testid=\"invoice-submit-btn\"",
+      "data-testid=\"print-invoice-btn\"",
+      "data-testid=\"view-invoice-btn-{invoice_no}\""
+    ]
+  },
+  "instructions_to_main_agent": [
+    "1. Replace font imports in index.css with @fontsource-variable/plus-jakarta-sans, @fontsource/poppins, and @fontsource-variable/lora.",
+    "2. Configure theme tokens in index.css with Navy Blue #0F2942 as primary accent and crisp slate neutrals.",
+    "3. Build responsive AppLayout with collapsible/desktop sidebar and top store header.",
+    "4. Implement Dashboard page with 6 summary cards and quick stock view.",
+    "5. Implement Products/Stock page with Add Product, Add Stock, Edit, Delete modals, real-time search and filter tabs.",
+    "6. Implement Create Invoice screen with customer details, dynamic item rows, auto-calculation, stock availability validation, and submit action.",
+    "7. Implement Invoice History page with search, date filter, view snapshot modal, and print trigger.",
+    "8. Implement Store Settings page allowing customization of store name, phone, address, and invoice prefix.",
+    "9. Create dedicated InvoicePrintSheet component strictly styled according to the user's reference invoice anatomy (light beige chip for invoice number, light beige table headers, light beige total box, serif thank you note, clean vertical borders, ₹ currency formatting).",
+    "10. Add Sonner toast feedback and subtle skeleton loaders for all asynchronous operations.",
+    "11. Seed the database with the 8 wholesale clothing products and 2 historical invoices provided in seed_data_blueprint."
+  ]
+}
