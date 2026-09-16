@@ -32,7 +32,7 @@ export default function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onOpenChange={loading ? undefined : onOpenChange}>
-      <DialogContent className="max-w-md" showCloseButton={false} data-testid="confirm-dialog">
+      <DialogContent className="sm:max-w-md" showCloseButton={false} data-testid="confirm-dialog">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>

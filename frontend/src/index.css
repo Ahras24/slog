@@ -151,7 +151,10 @@
   body {
     background: #ffffff !important;
   }
-  #root {
+  /* Hide every direct child of body (the app root AND dialog/modal portals) except the
+     print sheet — otherwise printing from a preview modal emits the invoice twice,
+     once at modal scale and once at full A4 size. */
+  body > *:not(#invoice-print-root) {
     display: none !important;
   }
   #invoice-print-root {

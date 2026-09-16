@@ -1,43 +1,31 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AlertOctagon, AlertTriangle, FilePlus2, IndianRupee, Layers, Package, Receipt } from "lucide-react";
-import { buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import SummaryCard from "@/components/dashboard/SummaryCard";
-import StockTable from "@/components/products/StockTable";
-import ProductFormModal from "@/components/products/ProductFormModal";
-import AddStockModal from "@/components/products/AddStockModal";
-import { fetchDashboard, fetchProducts, qk } from "@/lib/queries";
-import { formatINR } from "@/lib/format";
-import type { Product } from "@/lib/types";
+import InvoiceBuilderModal from "@/components/invoices/InvoiceBuilderModal";
+import { fetchDashboard, qk } from "@/lib/queries";
 
 export default function Dashboard() {
-  const navigate = useNavigate();
   const summaryQuery = useQuery({ queryKey: qk.dashboard, queryFn: fetchDashboard });
-  const productsQuery = useQuery({ queryKey: qk.products, queryFn: fetchProducts });
-
-  const [formOpen, setFormOpen] = useState(false);
-  const [editProduct, setEditProduct] = useState<Product | null>(null);
-  const [stockOpen, setStockOpen] = useState(false);
-  const [stockProduct, setStockProduct] = useState<Product | null>(null);
-
+  const [builderOpen, setBuilderOpen] = useState(false);
   const summary = summaryQuery.data;
   const summaryLoading = summaryQuery.isLoading;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="space-y-8">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Dashboard</h1>
-          <p className="text-sm text-slate-500">Stock and billing overview for your store.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Dashboard</h1>
+          <p className="mt-1 text-base text-slate-500">Stock and billing overview for your store.</p>
         </div>
-        <Link to="/invoices/new" className={buttonVariants()} data-testid="dashboard-create-invoice-btn">
-          <FilePlus2 className="h-4 w-4" />
+        <Button size="lg" onClick={() => setBuilderOpen(true)} data-testid="dashboard-create-invoice-btn">
+          <FilePlus2 className="h-5 w-5" />
           Create Invoice
-        </Link>
+        </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
         <SummaryCard
           testid="metric-total-products"
           label="Total Products"
@@ -71,7 +59,7 @@ export default function Dashboard() {
         <SummaryCard
           testid="metric-today-sales"
           label="Today's Sales"
-          value={summary ? formatINR(summary.today_sales) : "-"}
+          value={summary ? formatTodaySales(summary.today_sales) : "-"}
           icon={IndianRupee}
           tone="text-emerald-600"
           loading={summaryLoading}
@@ -85,39 +73,16 @@ export default function Dashboard() {
         />
       </div>
 
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight text-slate-900">Stock Management</h2>
-          <Link
-            to="/products"
-            className="text-sm font-medium text-[#0F2942] hover:underline"
-            data-testid="dashboard-view-all-products-link"
-          >
-            Go to products page
-          </Link>
-        </div>
-        <StockTable
-          products={productsQuery.data}
-          isLoading={productsQuery.isLoading}
-          onEdit={(product) => {
-            setEditProduct(product);
-            setFormOpen(true);
-          }}
-          onAddStock={(product) => {
-            setStockProduct(product);
-            setStockOpen(true);
-          }}
-          onSell={(product) => navigate(`/invoices/new?product=${product.id}`)}
-          emptyAction={
-            <Link to="/products" className={buttonVariants({ variant: "outline", size: "sm" })}>
-              Go to products
-            </Link>
-          }
-        />
-      </div>
-
-      <ProductFormModal open={formOpen} onOpenChange={setFormOpen} product={editProduct} />
-      <AddStockModal open={stockOpen} onOpenChange={setStockOpen} product={stockProduct} />
+      <InvoiceBuilderModal open={builderOpen} onOpenChange={setBuilderOpen} />
     </div>
   );
+}
+
+function formatTodaySales(value: number): string {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
 }

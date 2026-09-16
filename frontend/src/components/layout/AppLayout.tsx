@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { FilePlus2, History, LayoutDashboard, Menu, Package, Settings, Store } from "lucide-react";
+import { History, LayoutDashboard, Menu, Package, Settings, Store } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { fetchSettings, qk } from "@/lib/queries";
@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
   { to: "/products", label: "Products & Stock", icon: Package, testid: "nav-products", end: false },
-  { to: "/invoices/new", label: "Create Invoice", icon: FilePlus2, testid: "nav-create-invoice", end: false },
   { to: "/invoices", label: "Invoice History", icon: History, testid: "nav-invoices-history", end: true },
   { to: "/settings", label: "Settings", icon: Settings, testid: "nav-settings", end: false },
 ];

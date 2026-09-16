@@ -19,16 +19,17 @@ export default function InvoiceViewModal({ invoice, onOpenChange }: InvoiceViewM
   return (
     <>
       <Dialog open={Boolean(invoice)} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl" data-testid="invoice-view-modal">
+        <DialogContent className="sm:max-w-4xl" data-testid="invoice-view-modal">
           <DialogHeader>
             <DialogTitle>Invoice {invoice.invoice_number}</DialogTitle>
           </DialogHeader>
           <div
-            className="max-h-[65vh] overflow-y-auto rounded-lg border border-slate-200 bg-slate-100 p-3 sm:p-6"
+            className="max-h-[70vh] overflow-auto rounded-lg border border-slate-200 bg-slate-100 p-3 sm:p-5"
             data-testid="invoice-sheet-preview"
           >
-            <div className="mx-auto max-w-[620px] bg-white shadow-sm">
-              <div className="p-6 sm:p-8">
+            {/* True A4 width (210mm with 18mm page padding) so the preview matches the printout 1:1 */}
+            <div className="mx-auto w-[210mm] bg-white shadow-sm">
+              <div className="p-[18mm]">
                 <InvoiceSheet invoice={invoice} />
               </div>
             </div>

@@ -5,34 +5,42 @@ Internal admin dashboard (no customer-facing features, no cart, no payments, no 
 ## Stack & entry points
 - Backend: FastAPI + motor (Mongo `app` db), port 8001, all routes on `api_router` under `/api`.
 - Frontend: Vite + React 19 + TS strict + Tailwind v4 + shadcn (base-ui), port 3000, relative `/api` calls via `src/lib/api.ts`, TanStack Query.
-- Design: light theme, navy accent `#0F2942`, Plus Jakarta Sans (app), Poppins + Lora (invoice sheet), left sidebar, `w-64`, seed store: "Wholesale Clothing Co." phone "+91 97313 66545".
+- Design: light theme, navy accent `#0F2942`, Plus Jakarta Sans (app), Poppins + Lora (invoice sheet), left sidebar `w-64`, seed store: "Wholesale Clothing Co." phone "+91 97313 66545".
+
+## Pages & navigation (current — v2 layout)
+- Sidebar nav: Dashboard (/), Products & Stock (/products), Invoice History (/invoices), Settings (/settings). **No Create Invoice nav item and no /invoices/new route** — invoice creation is the `InvoiceBuilderModal`.
+- **Dashboard (/)**: 6 large summary cards ONLY (products section removed in v2). "Create Invoice" button opens InvoiceBuilderModal. Wildcard redirects to /.
+- **Products & Stock (/products)**: StockTable (px-4 column padding) + Add Product / Edit / Add Stock modals; "Sell" action opens InvoiceBuilderModal with the product preselected.
+- **Invoice History (/invoices)**: search + date range, View/Print actions; header + empty-state "Create Invoice" buttons open InvoiceBuilderModal.
+- **Settings (/settings)**: store details; only affect NEW invoices.
 
 ## Data model (Pydantic ↔ TS mirrors in `frontend/src/lib/types.ts`)
-- **Product** (`products`): `id` (uuid4 str), `name`, `code` (unique, uppercased), `stock` (int ≥ 0), `unit_price` (float ≥ 0), `status` (DERIVED on read, never stored: 0 → `out_of_stock`, 1–10 → `low_stock`, >10 → `in_stock`), `created_at`, `updated_at`.
-- **Invoice** (`invoices`): `id`, `invoice_number` (unique, `INV-0001` style, assigned server-side at finalize from `counters` collection, seq atomic `$inc`), `date` (YYYY-MM-DD str), customer snapshot (`customer_name` required, `company_name`, `street_address`, `city_pincode`, `phone`, `email`), `items[]` snapshot (`product_id`, `product_name`, `product_code`, `quantity`, `unit_price`, `total`), `subtotal`, `discount`, `round_off` (only shown non-zero; grand total = round(subtotal − discount)), `total`, `status: "Finalized"`, `store_phone` (snapshot for invoice footer), `created_at`.
-- **StoreSettings** (`store_settings`, single doc `id: "store"`): `store_name`, `phone`, `email`, `street_address`, `city_pincode`.
+- **Product** (`products`): `id` (uuid4 str), `name`, `code` (unique, uppercased), `stock` (int ≥ 0), `unit_price` (float ≥ 0), `status` (DERIVED on read: 0 → `out_of_stock`, 1–10 → `low_stock`, >10 → `in_stock`), `created_at`, `updated_at`.
+- **Invoice** (`invoices`): `id`, `invoice_number` (unique, `INV-0001` style, assigned server-side at finalize from `counters` seq `$inc`), `date` (YYYY-MM-DD str), customer snapshot (`customer_name` required + company/street/city/phone/email), `items[]` snapshot (`product_id`, `product_name`, `product_code`, `quantity`, `unit_price`, `total`), `subtotal`, `discount`, `round_off` (shown only non-zero; total = round(subtotal − discount)), `total`, `status: "Finalized"`, `store_phone` snapshot, `created_at`.
+- **StoreSettings** (`store_settings`, doc `id: "store"`): `store_name`, `phone`, `email`, `street_address`, `city_pincode`.
 
 ## API (all under `/api`)
-- `GET /products` (sorted by name), `POST /products` (409 on duplicate code), `PUT /products/{id}` (409 dup code excluding self; direct stock edit allowed, ≥0), `PATCH /products/{id}/stock` (body `{additional_quantity}` > 0), `DELETE /products/{id}` (204).
-- `GET /invoices/next-number` (preview `{invoice_number, date}` — authoritative number assigned at finalize), `GET /invoices?search=&date_from=&date_to=` (search matches invoice_number/customer_name/company_name), `POST /invoices` (atomic all-or-nothing stock deduction guarded on `stock >= qty`, rollback on any failure → 409 "Insufficient stock available for X."; discount > subtotal → 400; invalid date → 400), `GET /invoices/{id}`.
-- `GET /dashboard` — `total_products`, `total_stock`, `low_stock`, `out_of_stock`, `today_sales`, `today_invoice_count` ("today" anchored server-side via `lib.dates.today_iso()` UTC).
-- `GET/PUT /settings`.
-- Template endpoints `GET /` and `POST/GET /status` also exist (connectivity probe pattern).
+- `GET /products`, `POST /products` (409 duplicate code), `PUT /products/{id}` (409 excluding self), `PATCH /products/{id}/stock` (`{additional_quantity}` > 0), `DELETE /products/{id}` (204).
+- `GET /invoices/next-number` (preview; authoritative number assigned at finalize), `GET /invoices?search=&date_from=&date_to=`, `POST /invoices` (atomic all-or-nothing stock deduction guarded `stock >= qty`, rollback on failure → 409 "Insufficient stock available for X."; discount > subtotal → 400; bad date → 400), `GET /invoices/{id}`.
+- `GET /dashboard` — `total_products`, `total_stock`, `low_stock`, `out_of_stock`, `today_sales`, `today_invoice_count` (server-side "today" via `lib.dates.today_iso()` UTC).
+- `GET/PUT /settings`. Template probe endpoints `GET /`, `POST/GET /status` remain.
 
-## Key flows
-1. Dashboard (/): 6 summary cards + reusable StockTable (search by name/code, filter tabs All/In Stock/Low Stock/Out of Stock, actions Edit / Add Stock / Sell). Sell → `/invoices/new?product={id}` preselects the product.
-2. Products (/products): same StockTable + Add Product modal (shared add/edit `ProductFormModal`, delete confirm inside edit modal).
-3. Create Invoice (/invoices/new): Issued To form (name required), auto number (preview, assigned at finalize), date defaults to server today, item rows via searchable ProductPicker (auto code/price), qty validated against stock minus same product already in other rows → inline warning "Insufficient stock available. Only N left in stock." Finalize → confirm dialog → POST → snapshot modal with Print.
-4. Invoice History (/invoices): search + date range (server-side), rows View/Print. View opens snapshot modal ("exactly as created" — items are snapshots, immune to later product edits/deletes). Print → PrintPortal → `window.print()`.
-5. Settings (/settings): store details; only affect NEW invoices.
-6. Printing: `#invoice-print-root` portal; `@media print` hides `#root`, prints A4 portrait, beige chips/headers force color-adjust exact.
+## Invoice creation flow (v2)
+InvoiceBuilderModal (`components/invoices/InvoiceBuilderModal.tsx`): opened from Dashboard button / Products Sell / History buttons. Fresh form each open (`preselectProductId` preselects Sell product). Issued To (name required), auto number (preview; assigned at finalize), date = server today, item rows via searchable ProductPicker (auto code/price), qty validated against stock minus same product in other rows → inline "Insufficient stock available. Only N left in stock." Finalize → ConfirmDialog → POST → snapshot InvoiceViewModal opens over the builder with Print.
+
+## Invoice viewing & printing (v2 fixes)
+- InvoiceViewModal preview renders the sheet at TRUE A4 width (`w-[210mm] p-[18mm]`, modal `max-w-4xl`) — 1:1 with the printout.
+- Print: PrintPortal mounts `#invoice-print-root` to body; print CSS hides `body > *:not(#invoice-print-root)` (covers BOTH the app root and base-ui dialog portals — fixes the double-invoice/different-sizes print bug), `@page` A4 portrait margin 0, color-adjust exact.
+- History snapshots are immutable — immune to later product edits/deletes.
 
 ## Seed (`backend/seed.py`, idempotent, already applied)
-8 clothing products (Kurti stock 8 low, Jeans stock 4 low, Dupatta + Blazer stock 0 out), 2 invoices: INV-0001 yesterday (Rajesh Kumar/Metro Retailers Hub, ₹20,700), INV-0002 today (Ananya Sharma/Elegance Boutique, ₹22,500), counter seq=2 → next number INV-0003.
+8 clothing products (Kurti stock 8 low, Jeans stock 4 low, Dupatta + Blazer stock 0 out), 3 invoices from earlier runs (INV-0001 yesterday, INV-0002/0003 today), counter seq=3. Products page may also show "Rayon Printed Palazzo" (PLZ-RAY-21) created during UI verification.
 
 ## Credentials
-No login/auth anywhere — the panel is open. `memory/test_credentials.md` notes this too.
+No login/auth anywhere — the panel is open (user's explicit choice).
 
 ## Notes for testers
 - Do NOT click "Print Invoice" buttons in headless runs — they call `window.print()` (native dialog).
+- **Dialog width trap**: `components/ui/dialog.tsx` DialogContent ships `sm:max-w-sm` — a bare `max-w-*` prop loses the cascade at ≥640px. Always override with `sm:max-w-*` (builder `sm:max-w-5xl`, view `sm:max-w-4xl`, confirm `sm:max-w-md`).
 - Money formatting: `Intl.NumberFormat("en-IN", {currency: "INR"})` → "₹1,234.00".
+- "Create Invoice" lives on Dashboard / Products (Sell) / Invoice History — always as a modal, testid `invoice-builder-modal`.

@@ -1,22 +1,23 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import StockTable from "@/components/products/StockTable";
 import ProductFormModal from "@/components/products/ProductFormModal";
 import AddStockModal from "@/components/products/AddStockModal";
+import InvoiceBuilderModal from "@/components/invoices/InvoiceBuilderModal";
 import { fetchProducts, qk } from "@/lib/queries";
 import type { Product } from "@/lib/types";
 
 export default function Products() {
-  const navigate = useNavigate();
   const productsQuery = useQuery({ queryKey: qk.products, queryFn: fetchProducts });
 
   const [formOpen, setFormOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [stockOpen, setStockOpen] = useState(false);
   const [stockProduct, setStockProduct] = useState<Product | null>(null);
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [sellProductId, setSellProductId] = useState<string | undefined>(undefined);
 
   return (
     <div className="space-y-6">
@@ -48,7 +49,10 @@ export default function Products() {
           setStockProduct(product);
           setStockOpen(true);
         }}
-        onSell={(product) => navigate(`/invoices/new?product=${product.id}`)}
+        onSell={(product) => {
+          setSellProductId(product.id);
+          setBuilderOpen(true);
+        }}
         emptyAction={
           <Button
             size="sm"
@@ -66,6 +70,7 @@ export default function Products() {
 
       <ProductFormModal open={formOpen} onOpenChange={setFormOpen} product={editProduct} />
       <AddStockModal open={stockOpen} onOpenChange={setStockOpen} product={stockProduct} />
+      <InvoiceBuilderModal open={builderOpen} onOpenChange={setBuilderOpen} preselectProductId={sellProductId} />
     </div>
   );
 }

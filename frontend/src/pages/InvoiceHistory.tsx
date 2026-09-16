@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Eye, FilePlus2, Printer, Receipt, Search } from "lucide-react";
-import { buttonVariants, Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import EmptyState from "@/components/ui/EmptyState";
+import InvoiceBuilderModal from "@/components/invoices/InvoiceBuilderModal";
 import InvoiceViewModal from "@/components/invoices/InvoiceViewModal";
 import PrintPortal from "@/components/invoices/PrintPortal";
 import { fetchInvoices, qk } from "@/lib/queries";
@@ -18,6 +18,7 @@ export default function InvoiceHistory() {
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [builderOpen, setBuilderOpen] = useState(false);
 
   const filters = useMemo(() => ({ search, date_from: from, date_to: to }), [search, from, to]);
   const invoicesQuery = useQuery({ queryKey: qk.invoices(filters), queryFn: () => fetchInvoices(filters) });
@@ -35,10 +36,10 @@ export default function InvoiceHistory() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Invoice History</h1>
           <p className="text-sm text-slate-500">Every finalized invoice, stored exactly as it was created.</p>
         </div>
-        <Link to="/invoices/new" className={buttonVariants({ variant: "outline" })} data-testid="history-create-invoice-link">
+        <Button variant="outline" onClick={() => setBuilderOpen(true)} data-testid="history-create-invoice-btn">
           <FilePlus2 className="h-4 w-4" />
           Create Invoice
-        </Link>
+        </Button>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -109,9 +110,9 @@ export default function InvoiceHistory() {
               title="No invoices yet"
               description="Create your first invoice to see it stored here with its original details."
               action={
-                <Link to="/invoices/new" className={buttonVariants({ size: "sm" })}>
+                <Button size="sm" onClick={() => setBuilderOpen(true)} data-testid="invoices-empty-create-btn">
                   Create Invoice
-                </Link>
+                </Button>
               }
               testid="invoices-empty-state"
             />
@@ -179,6 +180,7 @@ export default function InvoiceHistory() {
         Invoice history preserves the original product names, codes and prices even if products change later.
       </p>
 
+      <InvoiceBuilderModal open={builderOpen} onOpenChange={setBuilderOpen} />
       <InvoiceViewModal
         invoice={viewInvoice}
         onOpenChange={(open) => {

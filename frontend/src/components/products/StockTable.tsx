@@ -26,7 +26,8 @@ interface StockTableProps {
   emptyAction?: ReactNode;
 }
 
-// Reusable stock table: shared by the Dashboard and the Products & Stock page.
+// Reusable stock table: shared by the Products & Stock page (and any future surface).
+// Columns keep generous horizontal padding so values never sit cramped together.
 export default function StockTable({ products, isLoading, onEdit, onAddStock, onSell, emptyAction }: StockTableProps) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<StockFilter>("all");
@@ -121,20 +122,20 @@ export default function StockTable({ products, isLoading, onEdit, onAddStock, on
         <Table>
           <TableHeader>
             <TableRow className="bg-slate-50/60 hover:bg-slate-50/60">
-              <TableHead>Product</TableHead>
-              <TableHead>Code</TableHead>
-              <TableHead className="text-right">Stock</TableHead>
-              <TableHead className="text-right">Unit Price</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="px-4">Product</TableHead>
+              <TableHead className="px-4">Code</TableHead>
+              <TableHead className="px-4 text-right">Stock</TableHead>
+              <TableHead className="px-4 text-right">Unit Price</TableHead>
+              <TableHead className="px-4">Status</TableHead>
+              <TableHead className="px-4 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.map((product) => (
               <TableRow key={product.id} data-testid={`product-row-${product.code}`}>
-                <TableCell className="font-medium text-slate-900">{product.name}</TableCell>
-                <TableCell className="font-mono text-xs text-slate-500">{product.code}</TableCell>
-                <TableCell className="text-right">
+                <TableCell className="px-4 font-medium text-slate-900">{product.name}</TableCell>
+                <TableCell className="px-4 font-mono text-xs text-slate-500">{product.code}</TableCell>
+                <TableCell className="px-4 text-right">
                   <span
                     className={cn(
                       "font-semibold",
@@ -144,12 +145,12 @@ export default function StockTable({ products, isLoading, onEdit, onAddStock, on
                     {product.stock}
                   </span>
                 </TableCell>
-                <TableCell className="text-right text-slate-700">{formatINR(product.unit_price)}</TableCell>
-                <TableCell>
+                <TableCell className="px-4 text-right text-slate-700">{formatINR(product.unit_price)}</TableCell>
+                <TableCell className="px-4">
                   <StatusBadge status={product.status} />
                 </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-1">
+                <TableCell className="px-4 text-right">
+                  <div className="flex items-center justify-end gap-2">
                     <Button
                       variant="ghost"
                       size="icon-sm"

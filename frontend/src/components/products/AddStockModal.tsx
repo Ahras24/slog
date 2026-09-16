@@ -50,7 +50,7 @@ export default function AddStockModal({ open, onOpenChange, product }: AddStockM
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md" data-testid="add-stock-modal">
+      <DialogContent className="sm:max-w-md" data-testid="add-stock-modal">
         <DialogHeader>
           <DialogTitle>Update Stock</DialogTitle>
           <DialogDescription>

@@ -95,7 +95,7 @@ export default function ProductFormModal({ open, onOpenChange, product }: Produc
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-lg" data-testid="product-form-modal">
+        <DialogContent className="sm:max-w-lg" data-testid="product-form-modal">
           <DialogHeader>
             <DialogTitle>{isEdit ? "Edit Product" : "Add Product"}</DialogTitle>
             <DialogDescription>
