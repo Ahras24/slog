@@ -13,18 +13,20 @@ Internal admin dashboard (no customer-facing features, no cart, no payments, no 
 - InvoiceBuilderModal item rows: Product 4/12, Code 2/12, **Qty 2/12 (input text-center px-2 so the count is visible)**, Unit Price 2/12, Total + remove (X inside the row card, `shrink-0`); row testid `invoice-item-row-{i}`.
 - **Dashboard (/)**: 6 large summary cards ONLY (products section removed in v2). "Create Invoice" button opens InvoiceBuilderModal. Wildcard redirects to /.
 - **Products & Stock (/products)**: StockTable (px-4 column padding) + Add Product / Edit / Add Stock modals; "Sell" action opens InvoiceBuilderModal with the product preselected.
-- **Invoice History (/invoices)**: search + date range, View/Print actions; header + empty-state "Create Invoice" buttons open InvoiceBuilderModal.
-- **Settings (/settings)**: store details; only affect NEW invoices.
+- **Invoice History (/invoices)**: search + date range, View / Print / **Delete** actions (delete testid `delete-invoice-btn-{number}`, ConfirmDialog, record-only removal — stock untouched); header + empty-state "Create Invoice" buttons open InvoiceBuilderModal.
+- **Settings (/settings)**: two cards — Store Details (name/phone/email/address, affect NEW invoices only) and **Invoice Numbering** (`settings-invoice-prefix-input` + live `{PREFIX}-0001` preview, client + server validation).
 
 ## Data model (Pydantic ↔ TS mirrors in `frontend/src/lib/types.ts`)
 - **Product** (`products`): `id` (uuid4 str), `name`, `code` (unique, uppercased), `stock` (int ≥ 0), `unit_price` (float ≥ 0), `status` (DERIVED on read: 0 → `out_of_stock`, 1–10 → `low_stock`, >10 → `in_stock`), `created_at`, `updated_at`.
 - **Invoice** (`invoices`): `id`, `invoice_number` (unique, `INV-0001` style, assigned server-side at finalize from `counters` seq `$inc`), `date` (YYYY-MM-DD str), customer snapshot (`customer_name` required + company/street/city/phone/email), `items[]` snapshot (`product_id`, `product_name`, `product_code`, `quantity`, `unit_price`, `total`), `subtotal`, `discount`, `round_off` (shown only non-zero; total = round(subtotal − discount)), `total`, `status: "Finalized"`, `store_phone` snapshot, `created_at`.
-- **StoreSettings** (`store_settings`, doc `id: "store"`): `store_name`, `phone`, `email`, `street_address`, `city_pincode`.
+- **StoreSettings** (`store_settings`, doc `id: "store"`): `store_name`, `phone`, `email`, `street_address`, `city_pincode`, `invoice_prefix` (default "INV"; uppercased, ≤10 chars, `[A-Za-z0-9][A-Za-z0-9_-]*`, blank falls back to "INV").
 
 ## API (all under `/api`)
 - `GET /products`, `POST /products` (409 duplicate code), `PUT /products/{id}` (409 excluding self), `PATCH /products/{id}/stock` (`{additional_quantity}` > 0), `DELETE /products/{id}` (204).
 - `GET /invoices/next-number` (preview; authoritative number assigned at finalize), `GET /invoices?search=&date_from=&date_to=`, `POST /invoices` (atomic all-or-nothing stock deduction guarded `stock >= qty`, rollback on failure → 409 "Insufficient stock available for X."; discount > subtotal → 400; bad date → 400), `GET /invoices/{id}`.
-- **Invoice numbering is self-healing** (`_reserve_invoice_number()` in `routers/invoices.py`): before each `$inc` the `counters.invoice` doc is realigned to `_highest_existing_seq()` — the max sequence parsed from invoices that actually exist. So deleting invoices straight from the DB makes numbering fall back (empty history → next is INV-0001) instead of climbing forever off a stale counter. Sequences are parsed in Python, not sorted lexicographically, so >9999 still orders correctly; insert is wrapped in a 5-attempt `DuplicateKeyError` retry against the unique `invoice_number` index, and stock is rolled back if every attempt fails.
+- **Invoice numbering is self-healing** (`_reserve_invoice_number(prefix)` in `routers/invoices.py`): before each `$inc` the `counters.invoice` doc is realigned to `_highest_existing_seq()` — the max sequence parsed from invoices that actually exist. So deleting invoices makes numbering fall back (empty history → next is INV-0001) instead of climbing forever off a stale counter. `_parse_seq` reads the trailing digits, so it is prefix-agnostic; sequences are parsed in Python, not sorted lexicographically, so >9999 still orders correctly; insert is wrapped in a 5-attempt `DuplicateKeyError` retry against the unique `invoice_number` index, and stock is rolled back if every attempt fails.
+- **Invoice prefix** comes from store settings (`{prefix}-{seq:04d}`). Prefix-only customisation: the sequence stays automatic and shared across prefixes — changing the prefix renames FUTURE numbers, it does not restart the count, and saved invoices keep their original numbers.
+- `DELETE /invoices/{id}` → 204 (404 if missing). **Deliberately does NOT restore stock** (user's explicit choice): it removes the record only; goods coming back are handled with Add Stock. Deleting frees that number for reuse via the reconciliation above.
 - `GET /dashboard` — `total_products`, `total_stock`, `low_stock`, `out_of_stock`, `today_sales`, `today_invoice_count` (server-side "today" via `lib.dates.today_iso()` UTC).
 - `GET/PUT /settings`. Template probe endpoints `GET /`, `POST/GET /status` remain.
 
@@ -37,7 +39,7 @@ InvoiceBuilderModal (`components/invoices/InvoiceBuilderModal.tsx`): opened from
 - History snapshots are immutable — immune to later product edits/deletes.
 
 ## Seed / current data state
-12 clothing products (3 low stock, 3 out of stock); invoices collection empty with `counters.invoice.seq = 0`, so the next invoice is INV-0001. `backend/seed.py` remains idempotent for a fresh environment.
+12 clothing products (3 low stock, 3 out of stock); invoices collection empty with `counters.invoice.seq = 0` and `invoice_prefix = "INV"`, so the next invoice is INV-0001. `backend/seed.py` remains idempotent for a fresh environment.
 
 ## Credentials
 No login/auth anywhere — the panel is open (user's explicit choice).

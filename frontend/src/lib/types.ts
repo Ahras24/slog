@@ -95,6 +95,7 @@ export interface StoreSettings {
   email: string;
   street_address: string;
   city_pincode: string;
+  invoice_prefix: string;
   updated_at: string;
 }
 
@@ -104,4 +105,5 @@ export interface StoreSettingsUpdate {
   email: string;
   street_address: string;
   city_pincode: string;
+  invoice_prefix: string;
 }

@@ -1,20 +1,24 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Eye, FilePlus2, Printer, Receipt, Search } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Eye, FilePlus2, Printer, Receipt, Search, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import EmptyState from "@/components/ui/EmptyState";
 import InvoiceBuilderModal from "@/components/invoices/InvoiceBuilderModal";
 import InvoiceViewModal from "@/components/invoices/InvoiceViewModal";
 import PrintPortal from "@/components/invoices/PrintPortal";
-import { fetchInvoices, qk } from "@/lib/queries";
+import { errorMessage } from "@/lib/errors";
+import { deleteInvoice, fetchInvoices, qk } from "@/lib/queries";
 import { formatDateShort, formatINR } from "@/lib/format";
 import type { Invoice } from "@/lib/types";
 
 export default function InvoiceHistory() {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -26,6 +30,20 @@ export default function InvoiceHistory() {
 
   const [viewInvoice, setViewInvoice] = useState<Invoice | null>(null);
   const [printInvoice, setPrintInvoice] = useState<Invoice | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Invoice | null>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: (invoice: Invoice) => deleteInvoice(invoice.id),
+    onSuccess: async (_data, invoice) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["invoices"] }),
+        queryClient.invalidateQueries({ queryKey: qk.dashboard }),
+      ]);
+      toast.success(`Invoice ${invoice.invoice_number} deleted`);
+      setDeleteTarget(null);
+    },
+    onError: (error) => toast.error(errorMessage(error, "Could not delete the invoice.")),
+  });
 
   const hasFilters = Boolean(search || from || to);
 
@@ -168,6 +186,16 @@ export default function InvoiceHistory() {
                       >
                         <Printer className="h-4 w-4" />
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        title="Delete invoice"
+                        className="text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                        onClick={() => setDeleteTarget(invoice)}
+                        data-testid={`delete-invoice-btn-${invoice.invoice_number}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -181,6 +209,20 @@ export default function InvoiceHistory() {
       </p>
 
       <InvoiceBuilderModal open={builderOpen} onOpenChange={setBuilderOpen} />
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        title={`Delete invoice ${deleteTarget?.invoice_number ?? ""}?`}
+        description={`This permanently removes the invoice record for ${deleteTarget?.customer_name ?? "this customer"} (${formatINR(deleteTarget?.total ?? 0)}). Stock stays as it is — use Add Stock if the goods came back. This cannot be undone.`}
+        confirmLabel="Delete Invoice"
+        destructive
+        loading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deleteTarget) deleteMutation.mutate(deleteTarget);
+        }}
+      />
       <InvoiceViewModal
         invoice={viewInvoice}
         onOpenChange={(open) => {

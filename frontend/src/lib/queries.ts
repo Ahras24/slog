@@ -47,4 +47,5 @@ export const addStock = (id: string, additionalQuantity: number) =>
   apiPatch<Product>(`/products/${id}/stock`, { additional_quantity: additionalQuantity });
 export const deleteProduct = (id: string) => apiDelete<void>(`/products/${id}`);
 export const createInvoice = (body: InvoiceCreate) => apiPost<Invoice>("/invoices", body);
+export const deleteInvoice = (id: string) => apiDelete<void>(`/invoices/${id}`);
 export const updateSettings = (body: StoreSettingsUpdate) => apiPut<StoreSettings>("/settings", body);

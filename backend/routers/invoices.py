@@ -11,6 +11,7 @@ from lib.dates import today_iso
 from lib.db import db
 from models.invoice import Invoice, InvoiceCreate, InvoiceItem, NextInvoiceNumber
 from models.product import utcnow
+from models.settings import DEFAULT_INVOICE_PREFIX
 
 router = APIRouter(prefix="/invoices")
 
@@ -20,12 +21,18 @@ def _clean(doc: dict) -> Invoice:
     return Invoice(**doc)
 
 
-def _number(seq: int) -> str:
-    return f"INV-{seq:04d}"
+def _number(seq: int, prefix: str = DEFAULT_INVOICE_PREFIX) -> str:
+    return f"{prefix}-{seq:04d}"
+
+
+async def _invoice_prefix() -> str:
+    """Store-configured invoice prefix; the sequence itself stays automatic."""
+    doc = await db.store_settings.find_one({"id": "store"}) or {}
+    return (doc.get("invoice_prefix") or DEFAULT_INVOICE_PREFIX).strip() or DEFAULT_INVOICE_PREFIX
 
 
 def _parse_seq(invoice_number: str) -> int:
-    """"INV-0007" -> 7. Unparseable numbers count as 0."""
+    """"INV-0007" / "WCC-0007" -> 7. Prefix-agnostic; unparseable numbers count as 0."""
     match = re.search(r"(\d+)\s*$", invoice_number or "")
     return int(match.group(1)) if match else 0
 
@@ -40,12 +47,13 @@ async def _highest_existing_seq() -> int:
     return max((_parse_seq(doc.get("invoice_number", "")) for doc in numbers), default=0)
 
 
-async def _reserve_invoice_number() -> str:
+async def _reserve_invoice_number(prefix: str) -> str:
     """Assign the next number, reconciled against the invoices actually stored.
 
     The counter alone goes stale whenever invoices are deleted (numbering would keep
     climbing past an empty history), so it is realigned to the real maximum first —
-    downwards after deletions, upwards if it ever lagged behind.
+    downwards after deletions, upwards if it ever lagged behind. The sequence is shared
+    across prefixes: changing the prefix renames future numbers, it does not restart them.
     """
     highest = await _highest_existing_seq()
     counter = await db.counters.find_one({"_id": "invoice"})
@@ -57,13 +65,17 @@ async def _reserve_invoice_number() -> str:
         upsert=True,
         return_document=ReturnDocument.AFTER,
     )
-    return _number(updated["seq"])
+    return _number(updated["seq"], prefix)
 
 
 @router.get("/next-number", response_model=NextInvoiceNumber)
 async def next_invoice_number():
     """Preview only — the authoritative number is assigned atomically at finalize time."""
-    return NextInvoiceNumber(invoice_number=_number(await _highest_existing_seq() + 1), date=today_iso())
+    prefix = await _invoice_prefix()
+    return NextInvoiceNumber(
+        invoice_number=_number(await _highest_existing_seq() + 1, prefix),
+        date=today_iso(),
+    )
 
 
 @router.get("", response_model=list[Invoice])
@@ -146,13 +158,14 @@ async def create_invoice(input: InvoiceCreate):
         deducted.append((item.product_id, item.quantity))
 
     settings = await db.store_settings.find_one({"id": "store"}) or {}
+    prefix = (settings.get("invoice_prefix") or DEFAULT_INVOICE_PREFIX).strip() or DEFAULT_INVOICE_PREFIX
 
     # The unique index on invoice_number is the final arbiter: on the rare race where two
     # finalizations reserve the same number, retry with a freshly reconciled one.
     last_error: Exception | None = None
     for _ in range(5):
         invoice = Invoice(
-            invoice_number=await _reserve_invoice_number(),
+            invoice_number=await _reserve_invoice_number(prefix),
             date=date,
             customer_name=input.customer_name.strip(),
             company_name=input.company_name.strip(),
@@ -184,3 +197,13 @@ async def get_invoice(invoice_id: str):
     if not doc:
         raise HTTPException(status_code=404, detail="Invoice not found.")
     return _clean(doc)
+
+
+@router.delete("/{invoice_id}", status_code=204)
+async def delete_invoice(invoice_id: str):
+    """Remove an invoice record. Stock is deliberately left as-is — deleting the record
+    does not un-sell the goods; use Add Stock if the items came back."""
+    result = await db.invoices.delete_one({"id": invoice_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Invoice not found.")
+    return None
