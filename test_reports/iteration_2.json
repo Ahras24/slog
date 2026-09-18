@@ -1,0 +1,82 @@
+{
+  "iteration": 2,
+  "summary": "RETEST: 9 checks passed, 0 failed, 0 blocked, 0 test_error, 0 flaky. Prior failure (remove button spilling outside invoice item row card) is fixed and verified for both row 0 and row 1, wide-total condition, and a narrower 1024px viewport.",
+  "passed": 9,
+  "failed": 0,
+  "retest_needed": false,
+  "checks": [
+    {
+      "criterion": "RETEST (primary): remove (X) button geometrically contained within the invoice item row card for both rows 0 and 1, at 1280 and 1024 viewports, with a wide Total value (SCK-MRN-11 qty 199 -> ~67,660.00); Qty stays >=50px and readable; clicking invoice-item-remove-1 removes that row.",
+      "name": "invoice-builder-qty-and-remove-layout",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Selected Merino Wool Crew Socks SCK-MRN-11 in row 0, qty=199 -> invoice-item-total-0 contained '67,660'; added row 1 via invoice-add-item-btn, selected SHIRT-OXF-01 qty=3. At 1280x800: boundingBox of invoice-item-remove-0 and invoice-item-remove-1 both fully within their respective invoice-item-row-{i} card bounds (all 4 edges), qty inputs >=50px wide and unclipped. Re-checked identically at 1024x800 (same containment holds). Clicked invoice-item-remove-1 -> invoice-item-row-1 count became 0 while invoice-item-row-0 remained visible. Screenshots: desktop-1280-both-rows, desktop-1024-both-rows, after-remove-row-1."
+    },
+    {
+      "criterion": "REGRESSION: invoice builder still calculates and finalizes correctly (product select auto-fills code/price, qty recomputes totals, discount applies, finalize creates invoice/deducts stock/opens snapshot; oversell blocked).",
+      "name": "test_tscheck_stock_billing_regression.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /products (201) tscheck-billing-flow-product stock=5; duplicate code -> 409; PATCH stock +10 -> 15; oversell qty=999 -> 409 'Insufficient stock available...', stock unchanged at 15; valid POST /invoices qty=4 discount=50 -> 201, subtotal 800.0/discount 50/total 750.0/status Finalized; stock decremented to 11; invoice present in GET /invoices."
+    },
+    {
+      "criterion": "REGRESSION UI: finalizing through the builder modal creates the invoice and opens the un-clipped invoice snapshot/view modal.",
+      "name": "invoice-view-modal-not-clipped",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Created a fresh fixture invoice via the builder modal (tscheck-view-modal-customer) through select-product -> qty -> finalize/confirm flow. invoice-view-modal width >=850px at 1280 viewport; invoice-sheet-preview scrollWidth <= clientWidth; INVOICE heading, total block, footer, and column headers all visible."
+    },
+    {
+      "criterion": "REGRESSION: invoice numbering restarts at INV-0001 on empty history and stays sequential.",
+      "name": "test_tscheck_a_invoice_numbering_restart.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "GET /invoices/next-number on empty invoices collection -> {\"invoice_number\":\"INV-0001\"}; POST /invoices (201) -> INV-0001; second POST /invoices (201) -> INV-0002 (sequential)."
+    },
+    {
+      "criterion": "REGRESSION: numbering falls back after deletion (highest existing +1 reuse); no duplicate invoice_number.",
+      "name": "test_tscheck_b_invoice_numbering_fallback.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "Created 2 fixture invoices (seq N, N+1); deleted the higher one directly via pymongo; GET /invoices/next-number reported the freed number again; POST /invoices (201) reused that exact number; all current invoice_number values confirmed unique."
+    },
+    {
+      "criterion": "REGRESSION: mobile bottom bar navigation and desktop sidebar.",
+      "name": "mobile-bottom-nav",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran persisted check unchanged: no hamburger at 390x844, bottom-nav items visible and route/highlight correctly; bottom-nav hidden at 1280px desktop."
+    },
+    {
+      "criterion": "REGRESSION: products list SI No column + 10-per-page pagination, search/filter resets to page 1.",
+      "name": "products-pagination-si-no",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran persisted check unchanged: SI No column, 10 rows page1/2 rows page2 (12 products), pagination controls and reset-on-filter all confirmed."
+    },
+    {
+      "criterion": "REGRESSION: invoice view modal is an un-clipped A4 sheet with required sections.",
+      "name": "invoice-view-modal-not-clipped",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran persisted check unchanged: modal width >=850px, no horizontal clipping, all required sections visible."
+    },
+    {
+      "criterion": "REGRESSION: only one invoice sheet renders for printing (print CSS scoping).",
+      "name": "invoice-print-single-instance",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran persisted check unchanged: @media print rules present, exactly one #invoice-print-root mounted and visible under emulated print media."
+    },
+    {
+      "criterion": "REGRESSION: dashboard shows only summary cards (no products table/nav item) and Create Invoice opens builder modal at ~1024px.",
+      "name": "dashboard-summary-cards",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran persisted check unchanged: metric cards match GET /api/dashboard, no table/nav-create-invoice elements, builder modal opens at expected width."
+    }
+  ],
+  "bugs": [],
+  "action_items": [],
+  "note": "9 distinct lane artifacts cover the 3 acceptance_matrix criteria (criterion 1 = 1 browser check; criterion 2 = 1 backend test + 1 browser check for the UI finalize path, plus the 4 unrelated iteration-1 regressions were also re-verified since they share the same modal component; criterion 3 = 2 backend tests). All previously-passing checks re-ran clean; the sole prior failure is now fixed and verified under the exact squeeze condition (wide total, two rows, narrower viewport) called out in the retest brief."
+}

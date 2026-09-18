@@ -1,19 +1,18 @@
-import { useEffect, useState } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { History, LayoutDashboard, Menu, Package, Settings, Store } from "lucide-react";
+import { History, LayoutDashboard, Package, Settings, Store } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { fetchSettings, qk } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
-  { to: "/products", label: "Products & Stock", icon: Package, testid: "nav-products", end: false },
-  { to: "/invoices", label: "Invoice History", icon: History, testid: "nav-invoices-history", end: true },
-  { to: "/settings", label: "Settings", icon: Settings, testid: "nav-settings", end: false },
+  { to: "/", label: "Dashboard", short: "Dashboard", navKey: "dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
+  { to: "/products", label: "Products & Stock", short: "Products", navKey: "products", icon: Package, testid: "nav-products", end: false },
+  { to: "/invoices", label: "Invoice History", short: "History", navKey: "invoices-history", icon: History, testid: "nav-invoices-history", end: true },
+  { to: "/settings", label: "Settings", short: "Settings", navKey: "settings", icon: Settings, testid: "nav-settings", end: false },
 ];
 
+// Desktop sidebar links (hidden behind lg: on the sidebar container).
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <nav className="flex flex-col gap-1 px-3">
@@ -87,14 +86,36 @@ function ProfileMenu({ storeName }: { storeName?: string }) {
   );
 }
 
-export default function AppLayout() {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const location = useLocation();
-  const { data: settings } = useQuery({ queryKey: qk.settings, queryFn: fetchSettings, retry: false });
+// Mobile navigation: fixed bottom bar (no hamburger menu).
+function BottomNav() {
+  return (
+    <nav
+      className="fixed inset-x-0 bottom-0 z-30 flex border-t border-slate-200 bg-white lg:hidden"
+      data-testid="bottom-nav"
+    >
+      {NAV_ITEMS.map(({ to, short, navKey, icon: Icon, end }) => (
+        <NavLink
+          key={to}
+          to={to}
+          end={end}
+          className={({ isActive }) =>
+            cn(
+              "flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition-colors duration-150",
+              isActive ? "text-[#0F2942]" : "text-slate-500"
+            )
+          }
+          data-testid={`bottom-nav-${navKey}`}
+        >
+          <Icon className="h-5 w-5" />
+          <span>{short}</span>
+        </NavLink>
+      ))}
+    </nav>
+  );
+}
 
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [location.pathname]);
+export default function AppLayout() {
+  const { data: settings } = useQuery({ queryKey: qk.settings, queryFn: fetchSettings, retry: false });
 
   return (
     <div className="min-h-svh bg-[#F8FAFC]">
@@ -104,30 +125,22 @@ export default function AppLayout() {
         <div className="mt-auto px-6 py-4 text-xs text-slate-400">Internal store panel</div>
       </aside>
 
+      <BottomNav />
+
       <div className="flex min-h-svh flex-col lg:pl-64">
         <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200 bg-white px-4 sm:px-6">
-          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetTrigger
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition-colors hover:bg-slate-50 lg:hidden"
-              data-testid="mobile-menu-button"
-            >
-              <Menu className="h-4 w-4" />
-            </SheetTrigger>
-            <SheetContent side="left" className="w-64 p-0">
-              <SheetHeader className="border-b border-slate-200">
-                <SheetTitle className="text-left text-sm font-semibold text-slate-900">
-                  {settings?.store_name ?? "Store Admin"}
-                </SheetTitle>
-              </SheetHeader>
-              <div className="py-3">
-                <NavLinks onNavigate={() => setMobileOpen(false)} />
-              </div>
-            </SheetContent>
-          </Sheet>
+          <div className="flex min-w-0 items-center gap-2 lg:hidden">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0F2942] text-white">
+              <Store className="h-4 w-4" />
+            </div>
+            <span className="truncate text-sm font-semibold text-slate-900" data-testid="mobile-store-name">
+              {settings?.store_name ?? "Store Admin"}
+            </span>
+          </div>
           <div className="flex-1" />
           <ProfileMenu storeName={settings?.store_name} />
         </header>
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 p-4 pb-24 sm:p-6 sm:pb-24 lg:p-8 lg:pb-8">
           <div className="mx-auto max-w-7xl animate-in fade-in duration-200">
             <Outlet />
           </div>

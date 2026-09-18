@@ -1,0 +1,84 @@
+{
+  "iteration": 1,
+  "summary": "8 checks passed, 1 browser check failed (real bug: remove button spills outside invoice item row card), 0 blocked, 0 test_error, 0 flaky (rerun confirmed the failure is consistent, not flaky).",
+  "passed": 8,
+  "failed": 1,
+  "retest_needed": true,
+  "checks": [
+    {
+      "criterion": "BUG FIX (primary): invoice numbering restarts from INV-0001 when invoices collection is empty; sequential thereafter.",
+      "name": "test_tscheck_a_invoice_numbering_restart.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "GET /invoices/next-number on empty invoices collection -> {\"invoice_number\":\"INV-0001\"}; POST /invoices (201) -> invoice_number INV-0001; second POST /invoices (201) -> INV-0002 (sequential, no skip ahead of highest existing seq). Note: must run with `-n 0` (serial) since -n 2 default xdist parallelism races two numbering tests against the shared counter; -n 0 is explicitly sanctioned by backend/pytest.ini's own comment."
+    },
+    {
+      "criterion": "BUG FIX: numbering falls back after deletions instead of climbing forever; no duplicate invoice_number ever produced.",
+      "name": "test_tscheck_b_invoice_numbering_fallback.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "Created 2 fixture invoices (seq N, N+1) via POST /invoices; deleted the higher one directly via pymongo db.invoices.delete_one(); GET /invoices/next-number then reported the freed number again; POST /invoices (201) reused that exact freed invoice_number; asserted all current invoice_number values are unique."
+    },
+    {
+      "criterion": "REGRESSION: core stock and billing flow works end to end (API layer) — duplicate code rejected, add-stock increases stock, finalize deducts stock, oversell rejected with no state change.",
+      "name": "test_tscheck_stock_billing_regression.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /products (201) create tscheck-billing-flow-product stock=5; duplicate code POST -> 409; PATCH /products/{id}/stock {additional_quantity:10} -> stock 15; oversell POST /invoices qty=999 -> 409 'Insufficient stock available...', stock confirmed unchanged at 15; valid POST /invoices qty=4 discount=50 -> 201, subtotal 800.0/discount 50/total 750.0/status Finalized; stock confirmed decremented to 11; invoice found in GET /invoices."
+    },
+    {
+      "criterion": "BUG FIX: mobile navigation is a fixed bottom bar (hamburger/slide-out menu removed); routes correctly and highlights active item; desktop uses sidebar with bottom bar hidden.",
+      "name": "mobile-bottom-nav",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "At 390x844: no hamburger/aria-label=menu element found (count 0); data-testid=bottom-nav visible with bottom-nav-dashboard/products/invoices-history/settings all visible; tapping each navigated to /, /products, /invoices, /settings respectively with visible navy active-state highlight (screenshot). At 1280px the bottom-nav became hidden (toBeHidden assertion passed)."
+    },
+    {
+      "criterion": "BUG FIX: products list has an SI No column with sequential numbering and 10-per-page pagination; search/filter resets to page 1.",
+      "name": "products-pagination-si-no",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "First column header 'SI No'; page 1 shows 10 rows numbered 1-10; stock-pagination-info='Page 1 of 2', range='Showing 1-10 of 12 products'; Prev disabled on page1, Next enabled; clicking Next -> 2 rows starting SI No 11, Page 2 of 2, Next disabled, Prev enabled; Prev returns to page 1; typing in search and switching to a status filter both reset back to page 1 from page 2."
+    },
+    {
+      "criterion": "BUG FIX: viewing an invoice shows an un-clipped A4 sheet with all required sections present.",
+      "name": "invoice-view-modal-not-clipped",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Created a fresh fixture invoice via the builder modal (tscheck-view-modal-customer). invoice-view-modal width >=850px at 1280 viewport; invoice-sheet-preview scrollWidth <= clientWidth (no clipping); INVOICE heading, invoice-sheet-total block, 'Thank You For Your Business' footer, Sub total label, and Product/Code/Qty/Unit Price/Total column headers all visible."
+    },
+    {
+      "criterion": "BUG FIX: only ONE invoice sheet is produced for printing (print CSS hides everything except #invoice-print-root).",
+      "name": "invoice-print-single-instance",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Created a fresh fixture invoice via the builder modal (tscheck-print-single-customer), window.print neutralized before any click. @media print stylesheet rules confirmed present (body>*:not(#invoice-print-root){display:none} and #invoice-print-root{display:block}). Clicking print-invoice-btn (force click, no native dialog) mounted exactly one #invoice-print-root as a direct child of body; under emulateMedia('print') exactly 1 of N invoice-sheet elements was visible."
+    },
+    {
+      "criterion": "BUG FIX: in the Create Invoice modal's product rows, the Qty is fully visible and the remove (X) button sits INSIDE the row card, not spilling outside it.",
+      "name": "invoice-builder-qty-and-remove-layout",
+      "lane": "browser",
+      "status": "failed",
+      "evidence": "Qty input width was fine (>=50px, value not clipped, passed). The remove button FAILS containment: boundingBox {x:764.2, width:32} extends to x=796.2, while the row card {x:160, width:622.66} ends at x=782.66 -> remove button overflows the row's right edge by ~13.5px. Reproduced identically on a rerun (not flaky). Root cause visible in components/invoices/InvoiceBuilderModal.tsx: the last grid column (md:col-span-2, ~90px wide at 1280px viewport) holds BOTH the 'Total' amount display and the h-9 w-9 remove Button side-by-side via `flex items-end justify-between gap-2`, and that flex content (Total text + 36px button + 8px gap) is wider than the column's ~90px allocation, pushing the button past the card's padded right edge."
+    },
+    {
+      "criterion": "REGRESSION: dashboard shows only the 6 summary metric cards (no products table, no Create Invoice nav item) matching GET /api/dashboard, and its Create Invoice button opens the builder modal at ~1024px wide.",
+      "name": "dashboard-summary-cards",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "GET /api/dashboard cross-checked against DOM: metric-total-products/total-stock/low-stock/out-of-stock/today-invoices all matched API values; metric-today-sales visible; zero <table> elements and zero nav-create-invoice elements found on /. dashboard-create-invoice-btn opened invoice-builder-modal with bounding-box width ~1024px (asserted 900-1150px range)."
+    }
+  ],
+  "bugs": [
+    {
+      "severity": "medium",
+      "criterion": "BUG FIX: remove (X) button must sit INSIDE the invoice item row card, not spilling outside it.",
+      "description": "In InvoiceBuilderModal's product row (data-testid=invoice-item-row-0), the last grid column (md:col-span-2) packs the 'Total' amount and the remove (X) button side-by-side via a flex row, and that flex content is wider than the column can hold at common desktop widths (1280px viewport tested). The remove button's bounding box (x=764.2, width=32 -> right edge 796.2) extends ~13.5px past the row card's right edge (x=160, width=622.66 -> right edge 782.66), i.e. the X button visibly spills outside the card border, contradicting the acceptance criterion verbatim. Reproduced twice (not flaky).",
+      "evidence": "Playwright boundingBox() on invoice-item-remove-0 vs invoice-item-row-0 at 1280x800 viewport, Oxford shirt product selected, qty=3: remove {x:764.203125,y:629,width:32,height:32} vs row {x:160,y:590,width:622.65625,height:108}. Screenshot: /root/.emergent/automation_output/20260918_120433_322/invoice-builder-qty-and-remove-layout-failure.png. Source: frontend/src/components/invoices/InvoiceBuilderModal.tsx lines ~288-312 (Total + remove Button share one md:col-span-2 flex container)."
+    }
+  ],
+  "action_items": [
+    "Fix InvoiceBuilderModal.tsx product row layout so the remove (X) button (h-9 w-9) does not share a cramped md:col-span-2 flex slot with the Total display — e.g. give the remove button its own grid column or move it outside the 12-col grid (as a shrink-0 sibling of the grid, still inside the row card padding) so it always stays within the card bounds at desktop widths.",
+      "Re-run browser check 'invoice-builder-qty-and-remove-layout' after the fix (script already handles both index 0 and would need extending to also add a second row via Add Item to fully cover index 1, currently only index 0 is asserted)."
+  ]
+}

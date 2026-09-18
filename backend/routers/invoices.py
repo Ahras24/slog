@@ -4,6 +4,7 @@ import re
 from datetime import datetime
 
 from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 from fastapi import APIRouter, HTTPException
 
 from lib.dates import today_iso
@@ -23,12 +24,46 @@ def _number(seq: int) -> str:
     return f"INV-{seq:04d}"
 
 
+def _parse_seq(invoice_number: str) -> int:
+    """"INV-0007" -> 7. Unparseable numbers count as 0."""
+    match = re.search(r"(\d+)\s*$", invoice_number or "")
+    return int(match.group(1)) if match else 0
+
+
+async def _highest_existing_seq() -> int:
+    """Highest sequence among invoices that actually exist right now.
+
+    Parsed in Python rather than relying on a lexicographic sort, which would rank
+    "INV-10000" below "INV-9999" once the sequence outgrows four digits.
+    """
+    numbers = await db.invoices.find({}, {"invoice_number": 1, "_id": 0}).to_list(20000)
+    return max((_parse_seq(doc.get("invoice_number", "")) for doc in numbers), default=0)
+
+
+async def _reserve_invoice_number() -> str:
+    """Assign the next number, reconciled against the invoices actually stored.
+
+    The counter alone goes stale whenever invoices are deleted (numbering would keep
+    climbing past an empty history), so it is realigned to the real maximum first —
+    downwards after deletions, upwards if it ever lagged behind.
+    """
+    highest = await _highest_existing_seq()
+    counter = await db.counters.find_one({"_id": "invoice"})
+    if (counter or {}).get("seq", 0) != highest:
+        await db.counters.update_one({"_id": "invoice"}, {"$set": {"seq": highest}}, upsert=True)
+    updated = await db.counters.find_one_and_update(
+        {"_id": "invoice"},
+        {"$inc": {"seq": 1}},
+        upsert=True,
+        return_document=ReturnDocument.AFTER,
+    )
+    return _number(updated["seq"])
+
+
 @router.get("/next-number", response_model=NextInvoiceNumber)
 async def next_invoice_number():
     """Preview only — the authoritative number is assigned atomically at finalize time."""
-    counter = await db.counters.find_one({"_id": "invoice"})
-    seq = (counter or {}).get("seq", 0) + 1
-    return NextInvoiceNumber(invoice_number=_number(seq), date=today_iso())
+    return NextInvoiceNumber(invoice_number=_number(await _highest_existing_seq() + 1), date=today_iso())
 
 
 @router.get("", response_model=list[Invoice])
@@ -110,32 +145,37 @@ async def create_invoice(input: InvoiceCreate):
             )
         deducted.append((item.product_id, item.quantity))
 
-    counter = await db.counters.find_one_and_update(
-        {"_id": "invoice"},
-        {"$inc": {"seq": 1}},
-        upsert=True,
-        return_document=ReturnDocument.AFTER,
-    )
     settings = await db.store_settings.find_one({"id": "store"}) or {}
 
-    invoice = Invoice(
-        invoice_number=_number(counter["seq"]),
-        date=date,
-        customer_name=input.customer_name.strip(),
-        company_name=input.company_name.strip(),
-        street_address=input.street_address.strip(),
-        city_pincode=input.city_pincode.strip(),
-        phone=input.phone.strip(),
-        email=input.email.strip(),
-        items=items,
-        subtotal=subtotal,
-        discount=discount,
-        round_off=round_off,
-        total=float(grand_total),
-        store_phone=(settings.get("phone") or ""),
-    )
-    await db.invoices.insert_one(invoice.model_dump())
-    return invoice
+    # The unique index on invoice_number is the final arbiter: on the rare race where two
+    # finalizations reserve the same number, retry with a freshly reconciled one.
+    last_error: Exception | None = None
+    for _ in range(5):
+        invoice = Invoice(
+            invoice_number=await _reserve_invoice_number(),
+            date=date,
+            customer_name=input.customer_name.strip(),
+            company_name=input.company_name.strip(),
+            street_address=input.street_address.strip(),
+            city_pincode=input.city_pincode.strip(),
+            phone=input.phone.strip(),
+            email=input.email.strip(),
+            items=items,
+            subtotal=subtotal,
+            discount=discount,
+            round_off=round_off,
+            total=float(grand_total),
+            store_phone=(settings.get("phone") or ""),
+        )
+        try:
+            await db.invoices.insert_one(invoice.model_dump())
+            return invoice
+        except DuplicateKeyError as exc:
+            last_error = exc
+
+    for product_id, quantity in deducted:  # numbering exhausted its retries: give the stock back
+        await db.products.update_one({"id": product_id}, {"$inc": {"stock": quantity}})
+    raise HTTPException(status_code=409, detail="Could not assign a unique invoice number. Please try again.") from last_error
 
 
 @router.get("/{invoice_id}", response_model=Invoice)

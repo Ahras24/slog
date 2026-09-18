@@ -242,9 +242,16 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
                     />
                   ) : (
                     parsedRows.map(({ row, product, qty, available, insufficient, lineTotal }, index) => (
-                      <div key={row.key} className="rounded-lg border border-slate-200 p-3">
-                        <div className="grid gap-3 md:grid-cols-12 md:items-end">
-                          <div className="md:col-span-5">
+                      <div
+                        key={row.key}
+                        className="rounded-lg border border-slate-200 p-3"
+                        data-testid={`invoice-item-row-${index}`}
+                      >
+                        {/* Remove button lives OUTSIDE the 12-col grid as a shrink-0 sibling, so it
+                            can never be squeezed out past the row card's right edge. */}
+                        <div className="flex items-end gap-2 sm:gap-3">
+                          <div className="grid min-w-0 flex-1 gap-3 md:grid-cols-12 md:items-end">
+                          <div className="md:col-span-4">
                             <Label className="text-xs text-slate-500">Product</Label>
                             <div className="mt-1.5">
                               <ProductPicker
@@ -264,7 +271,7 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
                               {product?.code ?? "-"}
                             </div>
                           </div>
-                          <div className="md:col-span-1">
+                          <div className="md:col-span-2">
                             <Label className="text-xs text-slate-500">Qty</Label>
                             <Input
                               type="number"
@@ -272,7 +279,7 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
                               step={1}
                               value={row.qty}
                               onChange={(event) => updateRow(row.key, { qty: event.target.value })}
-                              className="mt-1.5"
+                              className="mt-1.5 px-2 text-center"
                               data-testid={`invoice-item-qty-${index}`}
                             />
                           </div>
@@ -285,27 +292,27 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
                               {product ? formatINR(product.unit_price) : "-"}
                             </div>
                           </div>
-                          <div className="flex items-end justify-between gap-2 md:col-span-2">
-                            <div>
-                              <Label className="text-xs text-slate-500">Total (₹)</Label>
-                              <div
-                                className="mt-1.5 flex h-9 items-center px-1 text-sm font-semibold tabular-nums"
-                                data-testid={`invoice-item-total-${index}`}
-                              >
-                                {product ? formatINR(lineTotal) : "-"}
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              title="Remove item"
-                              onClick={() => removeRow(row.key)}
-                              disabled={rows.length === 1}
-                              data-testid={`invoice-item-remove-${index}`}
+                          <div className="md:col-span-2">
+                            <Label className="text-xs text-slate-500">Total (₹)</Label>
+                            <div
+                              className="mt-1.5 flex h-9 items-center text-sm font-semibold tabular-nums"
+                              data-testid={`invoice-item-total-${index}`}
                             >
-                              <X className="h-4 w-4" />
-                            </Button>
+                              {product ? formatINR(lineTotal) : "-"}
+                            </div>
                           </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            title="Remove item"
+                            onClick={() => removeRow(row.key)}
+                            disabled={rows.length === 1}
+                            className="mb-1 shrink-0 text-slate-400 hover:text-rose-600"
+                            data-testid={`invoice-item-remove-${index}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
                         </div>
                         {product && insufficient ? (
                           <p
