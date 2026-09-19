@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://slog-backend-q62zxvq0p-ahrazs-projects-1a9b4241.vercel.app/api/:path*"
+    }
+  ]
+}
