@@ -42,6 +42,7 @@ export default function AddStockModal({ open, onOpenChange, product }: AddStockM
     onSuccess: (updatedProduct) => {
       queryClient.invalidateQueries({ queryKey: qk.products });
       queryClient.invalidateQueries({ queryKey: qk.dashboard });
+      queryClient.invalidateQueries({ queryKey: ["reports"] });
       toast.success(`Stock updated — ${updatedProduct.name}: ${updatedProduct.stock} units`);
       onOpenChange(false);
     },

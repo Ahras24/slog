@@ -12,6 +12,7 @@ from lib.db import db
 from models.invoice import Invoice, InvoiceCreate, InvoiceItem, NextInvoiceNumber
 from models.product import utcnow
 from models.settings import DEFAULT_INVOICE_PREFIX
+from models.stock_transaction import StockTransaction
 
 router = APIRouter(prefix="/invoices")
 
@@ -173,6 +174,7 @@ async def create_invoice(input: InvoiceCreate):
             city_pincode=input.city_pincode.strip(),
             phone=input.phone.strip(),
             email=input.email.strip(),
+            payment_method=input.payment_method,
             items=items,
             subtotal=subtotal,
             discount=discount,
@@ -182,6 +184,22 @@ async def create_invoice(input: InvoiceCreate):
         )
         try:
             await db.invoices.insert_one(invoice.model_dump())
+            for item in invoice.items:
+                existing = await db.stock_transactions.find_one(
+                    {"reference_id": invoice.id, "product_id": item.product_id, "transaction_type": "sold"}
+                )
+                if existing:
+                    continue
+                transaction = StockTransaction(
+                    product_id=item.product_id,
+                    product_name=item.product_name,
+                    product_code=item.product_code,
+                    transaction_type="sold",
+                    quantity=item.quantity,
+                    unit_price=float(item.unit_price),
+                    reference_id=invoice.id,
+                )
+                await db.stock_transactions.insert_one(transaction.model_dump())
             return invoice
         except DuplicateKeyError as exc:
             last_error = exc

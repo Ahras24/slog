@@ -18,7 +18,7 @@ load_dotenv(ROOT_DIR / '.env')
 # MongoDB connection
 from lib.db import client, db, ensure_indexes
 
-from routers import dashboard, invoices, products
+from routers import dashboard, invoices, products, reports
 from routers import settings as settings_routes
 
 
@@ -68,6 +68,7 @@ api_router.include_router(products.router)
 api_router.include_router(invoices.router)
 api_router.include_router(settings_routes.router)
 api_router.include_router(dashboard.router)
+api_router.include_router(reports.router)
 
 # Include the router in the main app
 app.include_router(api_router)

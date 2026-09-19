@@ -65,6 +65,7 @@ def test_numbering_restarts_from_inv_0001_when_empty(client):
                 json={
                     "customer_name": "tscheck-numbering-customer-1",
                     "date": preview.json()["date"],
+                    "payment_method": "Cash(S)",
                     "items": [
                         {
                             "product_id": product["id"],
@@ -90,6 +91,7 @@ def test_numbering_restarts_from_inv_0001_when_empty(client):
                 json={
                     "customer_name": "tscheck-numbering-customer-2",
                     "date": preview.json()["date"],
+                    "payment_method": "Cash(S)",
                     "items": [
                         {
                             "product_id": product["id"],

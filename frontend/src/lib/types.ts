@@ -38,6 +38,8 @@ export interface InvoiceItem {
   total: number;
 }
 
+export type PaymentMethod = "Cash(S)" | "Cash(A)" | "Cash(I)" | "Cash(Z)" | "Cash";
+
 export interface Invoice {
   id: string;
   invoice_number: string;
@@ -48,6 +50,7 @@ export interface Invoice {
   city_pincode: string;
   phone: string;
   email: string;
+  payment_method?: PaymentMethod;
   items: InvoiceItem[];
   subtotal: number;
   discount: number;
@@ -71,6 +74,7 @@ export interface InvoiceCreate {
   phone: string;
   email: string;
   date?: string;
+  payment_method: PaymentMethod;
   discount: number;
   items: InvoiceCreateItem[];
 }
@@ -87,6 +91,40 @@ export interface DashboardSummary {
   out_of_stock: number;
   today_sales: number;
   today_invoice_count: number;
+}
+
+export interface StockSalesSummary {
+  total_stock_received: number;
+  total_units_sold: number;
+  total_sales_amount: number;
+  products_sold: number;
+}
+
+export interface StockSalesProductRow {
+  product_id: string;
+  product_name: string;
+  product_code: string;
+  opening_stock: number;
+  stock_received: number;
+  sold_quantity: number;
+  closing_stock: number;
+  sales_amount: number;
+}
+
+export interface StockSalesChartPoint {
+  product_name: string;
+  product_code: string;
+  stock_received: number;
+  sold_quantity: number;
+  sales_amount: number;
+}
+
+export interface MonthlyStockSalesReport {
+  selected_month: string;
+  summary: StockSalesSummary;
+  products: StockSalesProductRow[];
+  chart: StockSalesChartPoint[];
+  note?: string | null;
 }
 
 export interface StoreSettings {

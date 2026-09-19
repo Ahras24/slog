@@ -33,6 +33,9 @@ export default function InvoiceSheet({ invoice }: { invoice: Invoice }) {
             </span>
           </div>
           <div className="mt-2 text-sm font-bold">{formatInvoiceDate(invoice.date)}</div>
+          <div className="mt-1 text-sm" data-testid="invoice-sheet-payment-method">
+            Payment Method: {invoice.payment_method ?? "Not specified"}
+          </div>
         </div>
       </div>
 

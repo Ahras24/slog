@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import EmptyState from "@/components/ui/EmptyState";
 import InvoiceViewModal from "@/components/invoices/InvoiceViewModal";
@@ -22,7 +23,7 @@ import ProductPicker from "@/components/invoices/ProductPicker";
 import { errorMessage } from "@/lib/errors";
 import { formatINR } from "@/lib/format";
 import { createInvoice, fetchNextInvoiceNumber, fetchProducts, qk } from "@/lib/queries";
-import type { Invoice, Product } from "@/lib/types";
+import type { Invoice, PaymentMethod, Product } from "@/lib/types";
 
 interface ItemRow {
   key: number;
@@ -48,6 +49,8 @@ const CUSTOMER_FIELDS: { field: keyof typeof EMPTY_CUSTOMER; label: string; test
   { field: "email", label: "Email", testid: "invoice-email-input", placeholder: "Email address" },
 ];
 
+const PAYMENT_METHODS: PaymentMethod[] = ["Cash(S)", "Cash(A)", "Cash(I)", "Cash(Z)", "Cash"];
+
 interface InvoiceBuilderModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -71,6 +74,7 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
   const rowKey = useRef(1);
   const [customer, setCustomer] = useState(EMPTY_CUSTOMER);
   const [date, setDate] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
   const [discount, setDiscount] = useState("0");
   const [rows, setRows] = useState<ItemRow[]>([{ key: 0, product_id: "", qty: "1" }]);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -80,6 +84,7 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
   useEffect(() => {
     if (open) {
       setCustomer(EMPTY_CUSTOMER);
+      setPaymentMethod("");
       setDiscount("0");
       rowKey.current += 1;
       setRows([{ key: rowKey.current, product_id: preselectProductId ?? "", qty: "1" }]);
@@ -115,6 +120,7 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
 
   const canSubmit =
     customer.customer_name.trim().length > 0 &&
+    paymentMethod !== "" &&
     parsedRows.length > 0 &&
     parsedRows.every((entry) => entry.product && entry.qty >= 1 && !entry.insufficient) &&
     !discountInvalid;
@@ -124,6 +130,7 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
       createInvoice({
         ...customer,
         date: date || undefined,
+        payment_method: paymentMethod as PaymentMethod,
         discount: discountValue,
         items: parsedRows
           .filter((entry) => entry.product)
@@ -134,9 +141,11 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
         queryClient.invalidateQueries({ queryKey: qk.products }),
         queryClient.invalidateQueries({ queryKey: qk.dashboard }),
         queryClient.invalidateQueries({ queryKey: ["invoices"] }),
+        queryClient.invalidateQueries({ queryKey: ["reports"] }),
       ]);
       toast.success(`Invoice ${invoice.invoice_number} created. Stock updated.`);
       setCustomer(EMPTY_CUSTOMER);
+      setPaymentMethod("");
       setDiscount("0");
       rowKey.current += 1;
       setRows([{ key: rowKey.current, product_id: "", qty: "1" }]);
@@ -356,6 +365,24 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
                       onChange={(event) => setDate(event.target.value)}
                       data-testid="invoice-date-input"
                     />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="invoice-payment-method">Payment Method</Label>
+                    <Select
+                      value={paymentMethod}
+                      onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}
+                    >
+                      <SelectTrigger id="invoice-payment-method" className="w-full" data-testid="invoice-payment-method-select">
+                        <SelectValue placeholder="Select payment method" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PAYMENT_METHODS.map((method) => (
+                          <SelectItem key={method} value={method}>
+                            {method}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </CardContent>
               </Card>

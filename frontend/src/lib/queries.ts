@@ -3,6 +3,7 @@ import type {
   DashboardSummary,
   Invoice,
   InvoiceCreate,
+  MonthlyStockSalesReport,
   NextInvoiceNumber,
   Product,
   ProductCreate,
@@ -24,6 +25,7 @@ export const qk = {
   nextInvoiceNumber: ["invoices", "next-number"] as const,
   invoices: (filters: InvoiceFilters) => ["invoices", "list", filters] as const,
   invoice: (id: string) => ["invoices", "detail", id] as const,
+  stockSalesReport: (month: string) => ["reports", "stock-sales", month] as const,
 };
 
 function toQueryString(filters: InvoiceFilters): string {
@@ -37,6 +39,8 @@ function toQueryString(filters: InvoiceFilters): string {
 
 export const fetchProducts = () => apiGet<Product[]>("/products");
 export const fetchDashboard = () => apiGet<DashboardSummary>("/dashboard");
+export const fetchStockSalesReport = (month: string) =>
+  apiGet<MonthlyStockSalesReport>(`/reports/stock-sales?month=${encodeURIComponent(month)}`);
 export const fetchSettings = () => apiGet<StoreSettings>("/settings");
 export const fetchNextInvoiceNumber = () => apiGet<NextInvoiceNumber>("/invoices/next-number");
 export const fetchInvoices = (filters: InvoiceFilters) => apiGet<Invoice[]>(`/invoices${toQueryString(filters)}`);

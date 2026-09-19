@@ -12,6 +12,7 @@ from models.product import (
     stock_status,
     utcnow,
 )
+from models.stock_transaction import StockTransaction
 
 router = APIRouter(prefix="/products")
 
@@ -66,6 +67,16 @@ async def add_stock(product_id: str, input: StockAddRequest):
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Product not found.")
+
+    transaction = StockTransaction(
+        product_id=doc["id"],
+        product_name=doc["name"],
+        product_code=doc["code"],
+        transaction_type="received",
+        quantity=input.additional_quantity,
+        unit_price=float(doc.get("unit_price", 0.0)),
+    )
+    await db.stock_transactions.insert_one(transaction.model_dump())
     return _to_product(doc)
 
 

@@ -47,6 +47,7 @@ def _create_invoice(client, product, customer_suffix, date):
         json={
             "customer_name": f"tscheck-numbering-fallback-{customer_suffix}",
             "date": date,
+            "payment_method": "Cash(A)",
             "items": [
                 {
                     "product_id": product["id"],

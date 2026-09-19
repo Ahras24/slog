@@ -2,10 +2,13 @@
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from models.product import utcnow
+
+PaymentMethod = Literal["Cash(S)", "Cash(A)", "Cash(I)", "Cash(Z)", "Cash"]
 
 
 class InvoiceItem(BaseModel):
@@ -31,6 +34,7 @@ class InvoiceCreate(BaseModel):
     phone: str = ""
     email: str = ""
     date: str | None = None  # YYYY-MM-DD; defaults to the server's today
+    payment_method: PaymentMethod
     discount: float = Field(default=0, ge=0)
     items: list[InvoiceCreateItem] = Field(min_length=1)
 
@@ -45,6 +49,7 @@ class Invoice(BaseModel):
     city_pincode: str = ""
     phone: str = ""
     email: str = ""
+    payment_method: PaymentMethod | None = None
     items: list[InvoiceItem] = []
     subtotal: float = 0
     discount: float = 0
