@@ -17,6 +17,7 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   destructive?: boolean;
   loading?: boolean;
+  autoFocusConfirm?: boolean;
   onConfirm: () => void;
 }
 
@@ -28,6 +29,7 @@ export default function ConfirmDialog({
   confirmLabel = "Confirm",
   destructive = false,
   loading = false,
+  autoFocusConfirm = false,
   onConfirm,
 }: ConfirmDialogProps) {
   return (
@@ -44,6 +46,7 @@ export default function ConfirmDialog({
           <Button
             variant={destructive ? "destructive" : "default"}
             onClick={onConfirm}
+            autoFocus={autoFocusConfirm}
             disabled={loading}
             data-testid="confirm-accept-button"
           >

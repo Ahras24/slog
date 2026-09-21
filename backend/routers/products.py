@@ -36,6 +36,17 @@ async def create_product(input: ProductCreate):
         raise HTTPException(status_code=409, detail="A product with this code already exists.")
     product = Product(name=input.name, code=input.code, stock=input.stock, unit_price=input.unit_price)
     await db.products.insert_one(product.model_dump())
+    if product.stock > 0:
+        transaction = StockTransaction(
+            product_id=product.id,
+            product_name=product.name,
+            product_code=product.code,
+            transaction_type="received",
+            quantity=product.stock,
+            unit_price=float(product.unit_price),
+            reference_id=product.id,
+        )
+        await db.stock_transactions.insert_one(transaction.model_dump())
     product.status = stock_status(product.stock)
     return product
 

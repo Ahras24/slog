@@ -85,6 +85,17 @@ async def list_invoices(search: str = "", date_from: str = "", date_to: str = ""
         raise HTTPException(status_code=422, detail="Page must be at least 1.")
     if limit < 1 or limit > 100:
         raise HTTPException(status_code=422, detail="Limit must be between 1 and 100.")
+    today = today_iso()
+    for label, value in (("From", date_from), ("To", date_to)):
+        if value:
+            try:
+                datetime.strptime(value, "%Y-%m-%d")
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=f"{label} date must be in YYYY-MM-DD format.") from exc
+            if value > today:
+                raise HTTPException(status_code=422, detail=f"{label} date cannot be in the future.")
+    if date_from and date_to and date_to < date_from:
+        raise HTTPException(status_code=422, detail="To date cannot be earlier than From date.")
 
     query: dict = {}
     term = search.strip()
@@ -122,11 +133,10 @@ async def list_invoices(search: str = "", date_from: str = "", date_to: str = ""
 
 @router.post("", response_model=Invoice, status_code=201)
 async def create_invoice(input: InvoiceCreate):
-    date = (input.date or "").strip() or today_iso()
-    try:
-        datetime.strptime(date, "%Y-%m-%d")
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invoice date must be in YYYY-MM-DD format.")
+    date = today_iso()
+    submitted_date = (input.date or "").strip()
+    if submitted_date and submitted_date != date:
+        raise HTTPException(status_code=400, detail="New invoices must use today's date.")
 
     ids = [item.product_id for item in input.items]
     docs = await db.products.find({"id": {"$in": ids}}).to_list(len(ids) + 1)

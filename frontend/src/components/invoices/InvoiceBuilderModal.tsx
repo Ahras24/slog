@@ -77,7 +77,6 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
   const qtyRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const discountRef = useRef<HTMLInputElement>(null);
   const [customer, setCustomer] = useState(EMPTY_CUSTOMER);
-  const [date, setDate] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
   const [discount, setDiscount] = useState("0");
   const [rows, setRows] = useState<ItemRow[]>([{ key: 0, product_id: "", qty: "1" }]);
@@ -95,11 +94,6 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
       setCreatedInvoice(null);
     }
   }, [open, preselectProductId]);
-
-  useEffect(() => {
-    const nextDate = nextNumberQuery.data?.date;
-    if (open && nextDate) setDate(nextDate);
-  }, [open, nextNumberQuery.data?.date]);
 
   const productById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
 
@@ -133,7 +127,6 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
     mutationFn: () =>
       createInvoice({
         ...customer,
-        date: date || undefined,
         payment_method: paymentMethod as PaymentMethod,
         discount: discountValue,
         items: parsedRows
@@ -161,6 +154,14 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
       toast.error(errorMessage(error, "Could not create the invoice."));
     },
   });
+
+  const requestFinalize = () => {
+    if (canSubmit && !mutation.isPending && !confirmOpen) setConfirmOpen(true);
+  };
+
+  useEffect(() => {
+    if (open && paymentMethod) discountRef.current?.focus();
+  }, [open, paymentMethod]);
 
   const setField = (field: keyof typeof EMPTY_CUSTOMER) => (event: ChangeEvent<HTMLInputElement>) =>
     setCustomer((current) => ({ ...current, [field]: event.target.value }));
@@ -191,7 +192,7 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
             ref={formRef}
             className="grid gap-5 lg:grid-cols-3"
             onKeyDown={(event) => focusNextEnterField(event, formRef.current, () => {
-              if (canSubmit && !mutation.isPending) setConfirmOpen(true);
+              requestFinalize();
             })}
           >
             <div className="space-y-5 lg:col-span-2">
@@ -375,23 +376,11 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
                     <p className="text-xs text-slate-400">Assigned automatically. Duplicate numbers are not possible.</p>
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="invoice-date">Invoice Date</Label>
-                    <Input
-                      id="invoice-date"
-                      type="date"
-                      value={date}
-                      onChange={(event) => setDate(event.target.value)}
-                      data-enter-field
-                      data-testid="invoice-date-input"
-                    />
-                  </div>
-                  <div className="grid gap-2">
                     <Label htmlFor="invoice-payment-method">Payment Method</Label>
                     <Select
                       value={paymentMethod}
                       onValueChange={(value) => {
                         setPaymentMethod(value as PaymentMethod);
-                        discountRef.current?.focus();
                       }}
                     >
                       <SelectTrigger
@@ -460,7 +449,7 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
                   </div>
                   <Button
                     className="mt-4 w-full"
-                    onClick={() => setConfirmOpen(true)}
+                    onClick={requestFinalize}
                     disabled={!canSubmit || mutation.isPending}
                     data-testid="invoice-submit-btn"
                   >
@@ -481,6 +470,7 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
         title="Finalize invoice?"
         description={`Stock will be deducted and ${nextNumberQuery.data?.invoice_number ?? "the invoice"} saved to history. This cannot be undone.`}
         confirmLabel="Finalize & Save"
+        autoFocusConfirm
         loading={mutation.isPending}
         onConfirm={() => mutation.mutate()}
       />

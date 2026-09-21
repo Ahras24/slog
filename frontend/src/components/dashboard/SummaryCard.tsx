@@ -7,12 +7,21 @@ interface SummaryCardProps {
   value?: string | number;
   icon: LucideIcon;
   tone?: string;
+  background?: string;
   loading?: boolean;
 }
 
-export default function SummaryCard({ testid, label, value, icon: Icon, tone = "text-slate-500", loading = false }: SummaryCardProps) {
+export default function SummaryCard({
+  testid,
+  label,
+  value,
+  icon: Icon,
+  tone = "text-slate-500",
+  background = "bg-white",
+  loading = false,
+}: SummaryCardProps) {
   return (
-    <div className="flex flex-col justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" data-testid={testid}>
+    <div className={cn("flex flex-col justify-between gap-3 rounded-xl border border-slate-200 p-4 shadow-sm", background)} data-testid={testid}>
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-medium uppercase tracking-wider text-slate-500">{label}</span>
         <Icon className={cn("h-4 w-4 shrink-0", tone)} />

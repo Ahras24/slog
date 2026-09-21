@@ -21,6 +21,10 @@ export function formatDateShort(date: string): string {
   return Number.isNaN(parsed.getTime()) ? date : format(parsed, "dd MMM yyyy");
 }
 
+export function formatDateInput(date: Date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 export const STOCK_STATUS_LABELS: Record<StockStatus, string> = {
   in_stock: "In Stock",
   low_stock: "Low Stock",

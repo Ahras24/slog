@@ -175,6 +175,9 @@ def test_monthly_stock_sales_report_uses_transactions(client):
         assert add_stock_resp.status_code == 200, add_stock_resp.text
 
         today = client.get("/invoices/next-number").json()["date"]
+        before_report = client.get("/reports/stock-sales", params={"month": today[:7]})
+        assert before_report.status_code == 200, before_report.text
+        before_summary = before_report.json()["summary"]
         invoice_resp = client.post(
             "/invoices",
             json={
@@ -193,10 +196,10 @@ def test_monthly_stock_sales_report_uses_transactions(client):
 
         data = report_resp.json()
         assert data["selected_month"] == today[:7]
-        assert data["summary"]["total_stock_received"] == 10
-        assert data["summary"]["total_units_sold"] == 3
-        assert data["summary"]["total_sales_amount"] == 600.0
-        assert data["summary"]["products_sold"] == 1
+        assert data["summary"]["total_stock_received"] == before_summary["total_stock_received"] + 10
+        assert data["summary"]["total_units_sold"] == before_summary["total_units_sold"] + 3
+        assert data["summary"]["total_sales_amount"] == before_summary["total_sales_amount"] + 600.0
+        assert data["summary"]["products_sold"] == before_summary["products_sold"] + 1
 
         row = data["products"][0]
         assert row["product_code"] == "TSCHK-REPORT-01"

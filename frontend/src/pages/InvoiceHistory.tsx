@@ -14,7 +14,7 @@ import InvoiceViewModal from "@/components/invoices/InvoiceViewModal";
 import PrintPortal from "@/components/invoices/PrintPortal";
 import { errorMessage } from "@/lib/errors";
 import { deleteInvoice, fetchInvoices, qk } from "@/lib/queries";
-import { formatDateShort, formatINR } from "@/lib/format";
+import { formatDateInput, formatDateShort, formatINR } from "@/lib/format";
 import type { Invoice } from "@/lib/types";
 
 const PAGE_SIZE = 10;
@@ -37,9 +37,12 @@ export default function InvoiceHistory() {
   const [builderOpen, setBuilderOpen] = useState(false);
 
   const filters = useMemo(() => ({ search, date_from: from, date_to: to }), [search, from, to]);
+  const today = formatDateInput();
+  const dateRangeValid = (!from || from <= today) && (!to || to <= today) && (!from || !to || from <= to);
   const invoicesQuery = useQuery({
     queryKey: qk.invoices(filters, page, PAGE_SIZE),
     queryFn: () => fetchInvoices(filters, { page, limit: PAGE_SIZE }),
+    enabled: dateRangeValid,
   });
   const invoices = invoicesQuery.data?.invoices ?? [];
   const totalPages = invoicesQuery.data?.total_pages ?? 0;
@@ -97,6 +100,7 @@ export default function InvoiceHistory() {
             <Input
               type="date"
               value={from}
+              max={to || today}
               onChange={(event) => {
                 setFrom(event.target.value);
                 setPage(1);
@@ -110,6 +114,8 @@ export default function InvoiceHistory() {
             <Input
               type="date"
               value={to}
+              min={from || undefined}
+              max={today}
               onChange={(event) => {
                 setTo(event.target.value);
                 setPage(1);
@@ -140,6 +146,10 @@ export default function InvoiceHistory() {
             {Array.from({ length: 4 }).map((_, index) => (
               <div key={index} className="h-10 animate-pulse rounded-md bg-slate-100" />
             ))}
+          </div>
+        ) : !dateRangeValid ? (
+          <div className="p-6 text-sm text-rose-700" data-testid="invoice-date-filter-error">
+            Choose a valid date range. Future dates are not available, and To Date cannot be earlier than From Date.
           </div>
         ) : invoices.length === 0 ? (
           hasFilters ? (

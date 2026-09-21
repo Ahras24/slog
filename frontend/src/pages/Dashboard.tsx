@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import SummaryCard from "@/components/dashboard/SummaryCard";
 import InvoiceBuilderModal from "@/components/invoices/InvoiceBuilderModal";
 import { fetchDashboard, fetchStockSalesReport, qk } from "@/lib/queries";
-import { formatINR } from "@/lib/format";
+import { formatDateInput, formatINR } from "@/lib/format";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "@/lib/recharts";
 import { Search } from "lucide-react";
 import type { StockSalesReportType } from "@/lib/types";
@@ -34,8 +34,7 @@ export default function Dashboard() {
   const [selectedMonth, setSelectedMonth] = useState(() => formatMonthInput(new Date()));
   const [reportType, setReportType] = useState<StockSalesReportType>("monthly");
   const [selectedDate, setSelectedDate] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    return formatDateInput();
   });
   const [productSearch, setProductSearch] = useState("");
   const [productPage, setProductPage] = useState(1);
@@ -46,12 +45,13 @@ export default function Dashboard() {
   const reportQuery = useQuery({
     queryKey: qk.stockSalesReport(reportType, reportType === "daily" ? selectedDate : selectedMonth),
     queryFn: () => fetchStockSalesReport(reportType, reportType === "daily" ? selectedDate : selectedMonth),
-    enabled: Boolean(reportType === "daily" ? selectedDate : selectedMonth),
+    enabled: Boolean(reportType === "monthly" ? selectedMonth : selectedDate && selectedDate <= formatDateInput()),
   });
 
   const monthOptions = useMemo(() => getMonthOptions(12), []);
   const report = reportQuery.data;
   const reportSummary = report?.summary;
+  const dailyDateValid = reportType === "monthly" || (Boolean(selectedDate) && selectedDate <= formatDateInput());
   const filteredProducts = useMemo(() => {
     const term = productSearch.trim().toLowerCase();
     return (report?.products ?? []).filter(
@@ -91,6 +91,7 @@ export default function Dashboard() {
           label="Total Products"
           value={summary ? summary.total_products : "-"}
           icon={Package}
+          background="bg-emerald-50/70"
           loading={summaryLoading}
         />
         <SummaryCard
@@ -98,6 +99,7 @@ export default function Dashboard() {
           label="Total Stock"
           value={summary ? summary.total_stock : "-"}
           icon={Layers}
+          background="bg-emerald-50/70"
           loading={summaryLoading}
         />
         <SummaryCard
@@ -106,6 +108,7 @@ export default function Dashboard() {
           value={summary ? formatTodaySales(summary.today_sales) : "-"}
           icon={IndianRupee}
           tone="text-emerald-600"
+          background="bg-emerald-50/70"
           loading={summaryLoading}
         />
         <SummaryCard
@@ -113,6 +116,7 @@ export default function Dashboard() {
           label="Today's Invoices"
           value={summary ? summary.today_invoice_count : "-"}
           icon={Receipt}
+          background="bg-emerald-50/70"
           loading={summaryLoading}
         />
         <SummaryCard
@@ -121,6 +125,7 @@ export default function Dashboard() {
           value={summary ? summary.sale_count : "-"}
           icon={PackageCheck}
           tone="text-blue-600"
+          background="bg-emerald-50/70"
           loading={summaryLoading}
         />
       </div>
@@ -154,7 +159,14 @@ export default function Dashboard() {
                 <label htmlFor="report-date" className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-500">
                   Date
                 </label>
-                <Input id="report-date" type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} data-testid="report-date-input" />
+                <Input
+                  id="report-date"
+                  type="date"
+                  value={selectedDate}
+                  max={formatDateInput()}
+                  onChange={(event) => setSelectedDate(event.target.value)}
+                  data-testid="report-date-input"
+                />
               </div>
             ) : (
               <div>
@@ -181,6 +193,10 @@ export default function Dashboard() {
               {Array.from({ length: 4 }).map((_, idx) => (
                 <div key={idx} className="h-28 animate-pulse rounded-xl bg-slate-100" />
               ))}
+            </div>
+          ) : !dailyDateValid ? (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+              Report date cannot be in the future.
             </div>
           ) : reportQuery.isError || !report ? (
             <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">

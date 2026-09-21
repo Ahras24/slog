@@ -1,11 +1,12 @@
 """Daily and monthly stock and sales reports based on transactions and invoices."""
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException, Query
 
+from lib.dates import today_iso
 from lib.db import db
 from models.report import StockSalesReport
 
@@ -30,14 +31,27 @@ def _validate_date(date: str) -> str:
         datetime.strptime(date, "%Y-%m-%d")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Date must be in YYYY-MM-DD format.") from exc
+    if date > today_iso():
+        raise HTTPException(status_code=400, detail="Report date cannot be in the future.")
     return date
 
 
 def _transaction_date(value: object) -> str:
     if hasattr(value, "astimezone"):
-        zone = ZoneInfo(os.environ.get("APP_TZ", "UTC"))
+        if getattr(value, "tzinfo", None) is None:
+            value = value.replace(tzinfo=timezone.utc)
+        zone = ZoneInfo(os.environ.get("APP_TZ", "Asia/Kolkata"))
         return value.astimezone(zone).date().isoformat()
     return str(value)[:10]
+
+
+def _invoice_item_net_amount(invoice: dict, item: dict) -> float:
+    item_total = float(item.get("total", 0) or 0)
+    subtotal = float(invoice.get("subtotal", 0) or 0)
+    discount = float(invoice.get("discount", 0) or 0)
+    if subtotal <= 0 or discount <= 0:
+        return item_total
+    return max(0.0, item_total - discount * (item_total / subtotal))
 
 
 async def _daily_stock_sales_report(selected_date: str) -> dict:
@@ -49,10 +63,14 @@ async def _daily_stock_sales_report(selected_date: str) -> dict:
             "product_code": product["code"],
             "current_stock": int(product.get("stock", 0)),
             "received": 0,
+            "initial_stock": 0,
             "sold": 0,
             "sales_amount": 0.0,
             "received_after": 0,
             "sold_after": 0,
+            "all_sold": 0,
+            "all_received": 0,
+            "created_at": product.get("created_at"),
         }
         for product in products
     }
@@ -69,6 +87,7 @@ async def _daily_stock_sales_report(selected_date: str) -> dict:
         quantity = int(txn.get("quantity", 0))
         transaction_type = txn.get("transaction_type")
         if transaction_type == "sold":
+            row["all_sold"] += quantity
             reference_id = txn.get("reference_id")
             if reference_id:
                 sold_references.add((reference_id, product_id))
@@ -79,10 +98,15 @@ async def _daily_stock_sales_report(selected_date: str) -> dict:
             elif movement_date >= selected_date:
                 row["sold_after"] += quantity
         elif transaction_type == "received":
-            if movement_date == selected_date:
+            row["all_received"] += quantity
+            if txn.get("reference_id") == product_id:
+                row["initial_stock"] += quantity
+                if movement_date > selected_date:
+                    row["received_after"] += quantity
+            elif movement_date == selected_date:
                 row["received"] += quantity
                 row["received_after"] += quantity
-            elif movement_date >= selected_date:
+            elif movement_date > selected_date:
                 row["received_after"] += quantity
 
     invoices = await db.invoices.find({}).to_list(20000)
@@ -93,15 +117,29 @@ async def _daily_stock_sales_report(selected_date: str) -> dict:
         for item in invoice.get("items", []):
             product_id = item.get("product_id")
             row = rows.get(product_id)
-            if row is None or (invoice.get("id"), product_id) in sold_references:
+            if row is None:
                 continue
             quantity = int(item.get("quantity", 0))
+            if invoice_date == selected_date and (invoice.get("id"), product_id) in sold_references:
+                row["sales_amount"] -= float(invoice.get("discount", 0) or 0) * (
+                    float(item.get("total", 0) or 0) / float(invoice.get("subtotal", 1) or 1)
+                )
+                continue
             if invoice_date == selected_date:
                 row["sold"] += quantity
-                row["sales_amount"] += float(item.get("total", 0) or 0)
+                row["sales_amount"] += _invoice_item_net_amount(invoice, item)
                 row["sold_after"] += quantity
+                row["all_sold"] += quantity
             elif invoice_date >= selected_date:
                 row["sold_after"] += quantity
+                row["all_sold"] += quantity
+
+    received_product_ids = {txn.get("product_id") for txn in transactions if txn.get("transaction_type") == "received"}
+    for row in rows.values():
+        created_at = row.get("created_at")
+        if row["product_id"] in received_product_ids or created_at is None:
+            continue
+        row["initial_stock"] = max(0, row["current_stock"] + row["all_sold"] - row["all_received"])
 
     product_rows = []
     chart_rows = []
@@ -115,7 +153,7 @@ async def _daily_stock_sales_report(selected_date: str) -> dict:
         sold = int(row["sold"])
         sales_amount = round(float(row["sales_amount"]), 2)
         closing_stock = opening_stock + received - sold
-        total_received += received
+        total_received += received + int(row["initial_stock"])
         total_sold += sold
         total_sales_amount += sales_amount
         if sold > 0:
@@ -132,12 +170,13 @@ async def _daily_stock_sales_report(selected_date: str) -> dict:
                 "sales_amount": sales_amount,
             }
         )
-        if received > 0 or sold > 0:
+        chart_received = received + int(row["initial_stock"])
+        if chart_received > 0 or sold > 0:
             chart_rows.append(
                 {
                     "product_name": row["product_name"],
                     "product_code": row["product_code"],
-                    "stock_received": received,
+                    "stock_received": chart_received,
                     "sold_quantity": sold,
                     "sales_amount": sales_amount,
                 }
@@ -179,8 +218,12 @@ async def stock_sales_report(
             "product_code": product["code"],
             "current_stock": int(product.get("stock", 0)),
             "stock_received": 0,
+            "initial_stock": 0,
             "sold_quantity": 0,
             "sales_amount": 0.0,
+            "all_sold": 0,
+            "all_received": 0,
+            "created_at": product.get("created_at"),
         }
 
     transactions = await db.stock_transactions.find({}).to_list(20000)
@@ -194,10 +237,17 @@ async def stock_sales_report(
         created_at = txn.get("created_at")
         if created_at is None:
             continue
-        created_date = created_at.date().isoformat() if hasattr(created_at, "date") else str(created_at)[:10]
+        created_date = _transaction_date(created_at)
+        if txn.get("transaction_type") == "received":
+            row["all_received"] += qty
+            if txn.get("reference_id") == product_id:
+                row["initial_stock"] += qty
+        elif txn.get("transaction_type") == "sold":
+            row["all_sold"] += qty
         if month_start_str <= created_date < month_end_str:
             if txn.get("transaction_type") == "received":
-                row["stock_received"] += qty
+                if txn.get("reference_id") != product_id:
+                    row["stock_received"] += qty
             elif txn.get("transaction_type") == "sold":
                 row["sold_quantity"] += qty
                 if txn.get("unit_price") is not None:
@@ -218,9 +268,20 @@ async def stock_sales_report(
                 continue
             if month_start_str <= invoice_date < month_end_str:
                 if (invoice.get("id"), product_id) in sold_references:
+                    row["sales_amount"] -= float(invoice.get("discount", 0) or 0) * (
+                        float(item.get("total", 0) or 0) / float(invoice.get("subtotal", 1) or 1)
+                    )
                     continue
                 row["sold_quantity"] += int(item.get("quantity", 0))
-                row["sales_amount"] += float(item.get("total", 0) or 0)
+                row["all_sold"] += int(item.get("quantity", 0))
+                row["sales_amount"] += _invoice_item_net_amount(invoice, item)
+
+    received_product_ids = {txn.get("product_id") for txn in transactions if txn.get("transaction_type") == "received"}
+    for row in rows.values():
+        created_at = row.get("created_at")
+        if row["product_id"] in received_product_ids:
+            continue
+        row["initial_stock"] = max(0, row["current_stock"] + row["all_sold"] - row["all_received"])
 
     product_rows = []
     chart_rows = []
@@ -232,11 +293,11 @@ async def stock_sales_report(
     for row in sorted(rows.values(), key=lambda item: item["product_name"].lower()):
         stock_received = int(row["stock_received"])
         sold_quantity = int(row["sold_quantity"])
-        opening_stock = row["current_stock"] + sold_quantity - stock_received
+        opening_stock = int(row["initial_stock"])
         closing_stock = opening_stock + stock_received - sold_quantity
         sales_amount = round(float(row["sales_amount"]), 2)
 
-        total_received += stock_received
+        total_received += stock_received + int(row["initial_stock"])
         total_sold_qty += sold_quantity
         total_sales_amount += sales_amount
         if sold_quantity > 0:
@@ -254,12 +315,13 @@ async def stock_sales_report(
         }
         product_rows.append(product_row)
 
-        if stock_received > 0 or sold_quantity > 0:
+        chart_received = stock_received + int(row["initial_stock"])
+        if chart_received > 0 or sold_quantity > 0:
             chart_rows.append(
                 {
                     "product_name": row["product_name"],
                     "product_code": row["product_code"],
-                    "stock_received": stock_received,
+                    "stock_received": chart_received,
                     "sold_quantity": sold_quantity,
                     "sales_amount": sales_amount,
                 }

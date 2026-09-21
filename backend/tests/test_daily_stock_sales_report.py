@@ -27,7 +27,7 @@ def test_daily_stock_sales_report_uses_daily_movements_and_invoice_prices(client
         received_response = client.patch(f"/products/{product_id}/stock", json={"additional_quantity": 20})
         assert received_response.status_code == 200, received_response.text
 
-        for customer, quantity in (("daily-customer-one", 3), ("daily-customer-two", 2)):
+        for customer, quantity, discount in (("daily-customer-one", 3, 0), ("daily-customer-two", 2, 100)):
             invoice_response = client.post(
                 "/invoices",
                 json={
@@ -35,7 +35,7 @@ def test_daily_stock_sales_report_uses_daily_movements_and_invoice_prices(client
                     "date": report_date,
                     "payment_method": "Cash",
                     "items": [{"product_id": product_id, "quantity": quantity, "unit_price": 250}],
-                    "discount": 0,
+                    "discount": discount,
                 },
             )
             assert invoice_response.status_code == 201, invoice_response.text
@@ -48,14 +48,17 @@ def test_daily_stock_sales_report_uses_daily_movements_and_invoice_prices(client
         assert data["selected_date"] == report_date
         assert data["summary"]["total_stock_received"] == before_summary["total_stock_received"] + 20
         assert data["summary"]["total_units_sold"] == before_summary["total_units_sold"] + 5
-        assert data["summary"]["total_sales_amount"] == before_summary["total_sales_amount"] + 1250.0
+        assert data["summary"]["total_sales_amount"] == before_summary["total_sales_amount"] + 1150.0
         assert data["summary"]["products_sold"] == before_summary["products_sold"] + 1
         row = next(product for product in data["products"] if product["product_code"] == code)
         assert row["opening_stock"] == 0
         assert row["stock_received"] == 20
         assert row["sold_quantity"] == 5
         assert row["closing_stock"] == 15
-        assert row["sales_amount"] == 1250.0
+        assert row["sales_amount"] == 1150.0
+        chart = next(point for point in data["chart"] if point["product_code"] == code)
+        assert chart["stock_received"] == data["summary"]["total_stock_received"] - before_summary["total_stock_received"]
+        assert chart["sold_quantity"] == 5
 
         empty_day = client.get("/reports/stock-sales", params={"date": "2000-01-01"})
         assert empty_day.status_code == 200, empty_day.text
