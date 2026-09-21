@@ -34,7 +34,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 # Create a router with the /api prefix
-api_router = APIRouter(prefix="/api")
+api_router = APIRouter()
 
 
 # Define Models
