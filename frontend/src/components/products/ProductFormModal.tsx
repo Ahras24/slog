@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { errorMessage } from "@/lib/errors";
+import { focusNextEnterField } from "@/lib/keyboard";
 import { createProduct, deleteProduct, qk, updateProduct } from "@/lib/queries";
 import type { Product } from "@/lib/types";
 
@@ -35,6 +36,7 @@ export default function ProductFormModal({ open, onOpenChange, product }: Produc
   const [price, setPrice] = useState("");
   const [codeError, setCodeError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const formRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -104,7 +106,15 @@ export default function ProductFormModal({ open, onOpenChange, product }: Produc
                 : "Fill in the details to add a new product to stock."}
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-2">
+          <div
+            ref={formRef}
+            className="grid gap-4 py-2"
+            onKeyDown={(event) =>
+              focusNextEnterField(event, formRef.current, () => {
+                if (valid && !saveMutation.isPending) saveMutation.mutate();
+              })
+            }
+          >
             <div className="grid gap-2">
               <Label htmlFor="product-name">Product Name</Label>
               <Input
@@ -112,6 +122,7 @@ export default function ProductFormModal({ open, onOpenChange, product }: Produc
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="e.g. Cotton Oxford Shirt"
+                data-enter-field
                 data-testid="product-name-input"
               />
             </div>
@@ -126,6 +137,7 @@ export default function ProductFormModal({ open, onOpenChange, product }: Produc
                 }}
                 placeholder="e.g. SHIRT-OXF-01"
                 className={codeError ? "border-rose-400" : undefined}
+                data-enter-field
                 data-testid="product-code-input"
               />
               {codeError ? (
@@ -144,6 +156,7 @@ export default function ProductFormModal({ open, onOpenChange, product }: Produc
                   step={1}
                   value={stock}
                   onChange={(event) => setStock(event.target.value)}
+                  data-enter-field
                   data-testid="product-stock-input"
                 />
               </div>
@@ -157,6 +170,7 @@ export default function ProductFormModal({ open, onOpenChange, product }: Produc
                   value={price}
                   onChange={(event) => setPrice(event.target.value)}
                   placeholder="0.00"
+                  data-enter-field
                   data-testid="product-price-input"
                 />
               </div>

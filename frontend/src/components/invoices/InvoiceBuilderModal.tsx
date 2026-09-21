@@ -22,6 +22,7 @@ import InvoiceViewModal from "@/components/invoices/InvoiceViewModal";
 import ProductPicker from "@/components/invoices/ProductPicker";
 import { errorMessage } from "@/lib/errors";
 import { formatINR } from "@/lib/format";
+import { focusNextEnterField } from "@/lib/keyboard";
 import { createInvoice, fetchNextInvoiceNumber, fetchProducts, qk } from "@/lib/queries";
 import type { Invoice, PaymentMethod, Product } from "@/lib/types";
 
@@ -72,6 +73,9 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
   });
 
   const rowKey = useRef(1);
+  const formRef = useRef<HTMLDivElement>(null);
+  const qtyRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const discountRef = useRef<HTMLInputElement>(null);
   const [customer, setCustomer] = useState(EMPTY_CUSTOMER);
   const [date, setDate] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
@@ -183,7 +187,13 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-5 lg:grid-cols-3">
+          <div
+            ref={formRef}
+            className="grid gap-5 lg:grid-cols-3"
+            onKeyDown={(event) => focusNextEnterField(event, formRef.current, () => {
+              if (canSubmit && !mutation.isPending) setConfirmOpen(true);
+            })}
+          >
             <div className="space-y-5 lg:col-span-2">
               <Card>
                 <CardHeader>
@@ -200,6 +210,7 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
                         onChange={setField(field)}
                         placeholder={placeholder}
                         className="mt-1.5"
+                        data-enter-field
                         data-testid={testid}
                       />
                     </div>
@@ -250,7 +261,7 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
                       testid="invoice-items-empty-state"
                     />
                   ) : (
-                    parsedRows.map(({ row, product, qty, available, insufficient, lineTotal }, index) => (
+                    parsedRows.map(({ row, product, available, insufficient, lineTotal }, index) => (
                       <div
                         key={row.key}
                         className="rounded-lg border border-slate-200 p-3"
@@ -266,7 +277,10 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
                               <ProductPicker
                                 products={products}
                                 value={row.product_id}
-                                onSelect={(selected: Product) => updateRow(row.key, { product_id: selected.id })}
+                                onSelect={(selected: Product) => {
+                                  updateRow(row.key, { product_id: selected.id });
+                                  qtyRefs.current[row.key]?.focus();
+                                }}
                                 testid={`invoice-item-select-${index}`}
                               />
                             </div>
@@ -288,7 +302,11 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
                               step={1}
                               value={row.qty}
                               onChange={(event) => updateRow(row.key, { qty: event.target.value })}
+                              ref={(element) => {
+                                qtyRefs.current[row.key] = element;
+                              }}
                               className="mt-1.5 px-2 text-center"
+                              data-enter-field
                               data-testid={`invoice-item-qty-${index}`}
                             />
                           </div>
@@ -363,6 +381,7 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
                       type="date"
                       value={date}
                       onChange={(event) => setDate(event.target.value)}
+                      data-enter-field
                       data-testid="invoice-date-input"
                     />
                   </div>
@@ -370,9 +389,17 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
                     <Label htmlFor="invoice-payment-method">Payment Method</Label>
                     <Select
                       value={paymentMethod}
-                      onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}
+                      onValueChange={(value) => {
+                        setPaymentMethod(value as PaymentMethod);
+                        discountRef.current?.focus();
+                      }}
                     >
-                      <SelectTrigger id="invoice-payment-method" className="w-full" data-testid="invoice-payment-method-select">
+                      <SelectTrigger
+                        id="invoice-payment-method"
+                        className="w-full"
+                        data-enter-field
+                        data-testid="invoice-payment-method-select"
+                      >
                         <SelectValue placeholder="Select payment method" />
                       </SelectTrigger>
                       <SelectContent>
@@ -407,6 +434,8 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
                       step="0.01"
                       value={discount}
                       onChange={(event) => setDiscount(event.target.value)}
+                      ref={discountRef}
+                      data-enter-field
                       data-testid="invoice-discount-input"
                     />
                     {discountInvalid ? (

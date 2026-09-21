@@ -29,6 +29,8 @@ class StockSalesChartPoint(BaseModel):
 
 class StockSalesReport(BaseModel):
     selected_month: str
+    selected_date: str | None = None
+    report_type: str = "monthly"
     summary: StockSalesSummary = Field(default_factory=StockSalesSummary)
     products: list[StockSalesProductRow] = Field(default_factory=list)
     chart: list[StockSalesChartPoint] = Field(default_factory=list)

@@ -40,7 +40,14 @@ async def dashboard_summary():
     invoice_rows = await db.invoices.aggregate(
         [
             {"$match": {"date": today}},
-            {"$group": {"_id": None, "count": {"$sum": 1}, "sales": {"$sum": "$total"}}},
+            {
+                "$group": {
+                    "_id": None,
+                    "count": {"$sum": 1},
+                    "sales": {"$sum": "$total"},
+                    "sale_count": {"$sum": {"$sum": "$items.quantity"}},
+                }
+            },
         ]
     ).to_list(1)
     invoices = invoice_rows[0] if invoice_rows else {}
@@ -52,4 +59,5 @@ async def dashboard_summary():
         out_of_stock=products.get("out_of_stock", 0),
         today_sales=round(invoices.get("sales", 0), 2),
         today_invoice_count=invoices.get("count", 0),
+        sale_count=invoices.get("sale_count", 0),
     )

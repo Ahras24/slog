@@ -26,7 +26,7 @@ def _to_product(doc: dict) -> Product:
 
 @router.get("", response_model=list[Product])
 async def list_products():
-    docs = await db.products.find().sort([("name", 1)]).to_list(5000)
+    docs = await db.products.find().sort([("created_at", -1), ("id", -1)]).to_list(5000)
     return [_to_product(doc) for doc in docs]
 
 

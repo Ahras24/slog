@@ -113,7 +113,7 @@ def test_numbering_restarts_from_inv_0001_when_empty(client):
             assert num1 != num2
 
             # never skips ahead of highest existing seq
-            all_invoices = client.get("/invoices").json()
+            all_invoices = client.get("/invoices?limit=100").json()["invoices"]
             seqs = [_seq(inv["invoice_number"]) for inv in all_invoices]
             assert max(seqs) == _seq(num2)
         finally:

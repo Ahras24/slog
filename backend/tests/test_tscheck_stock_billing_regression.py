@@ -100,7 +100,7 @@ def test_stock_and_billing_flow(client):
         current = next(p for p in products_list if p["id"] == created_product_id)
         assert current["stock"] == 15, "stock must be unchanged after rejected oversell"
 
-        invoices_before = len(client.get("/invoices").json())
+        invoices_before = client.get("/invoices?limit=100").json()["total"]
 
         # valid invoice deducts stock
         good_resp = client.post(
@@ -134,11 +134,11 @@ def test_stock_and_billing_flow(client):
         current_after = next(p for p in products_list_after if p["id"] == created_product_id)
         assert current_after["stock"] == 11, f"expected stock 15-4=11, got {current_after['stock']}"
 
-        invoices_after = len(client.get("/invoices").json())
+        invoices_after = client.get("/invoices?limit=100").json()["total"]
         assert invoices_after == invoices_before + 1
 
         # invoice appears in history
-        all_invoices = client.get("/invoices").json()
+        all_invoices = client.get("/invoices?limit=100").json()["invoices"]
         assert any(inv["id"] == invoice["id"] for inv in all_invoices)
     finally:
         if created_invoice_ids:

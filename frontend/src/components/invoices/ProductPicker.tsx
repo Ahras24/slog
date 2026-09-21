@@ -31,6 +31,7 @@ export default function ProductPicker({ products, value, onSelect, testid }: Pro
           selected ? "text-slate-900" : "text-slate-400"
         )}
         data-testid={testid}
+        data-enter-field
       >
         <span className="truncate">{selected ? selected.name : "Select product"}</span>
         <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-400" />

@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException
 
 from lib.dates import today_iso
 from lib.db import db
-from models.invoice import Invoice, InvoiceCreate, InvoiceItem, NextInvoiceNumber
+from models.invoice import Invoice, InvoiceCreate, InvoiceItem, InvoiceListResponse, NextInvoiceNumber
 from models.product import utcnow
 from models.settings import DEFAULT_INVOICE_PREFIX
 from models.stock_transaction import StockTransaction
@@ -79,8 +79,13 @@ async def next_invoice_number():
     )
 
 
-@router.get("", response_model=list[Invoice])
-async def list_invoices(search: str = "", date_from: str = "", date_to: str = ""):
+@router.get("", response_model=InvoiceListResponse)
+async def list_invoices(search: str = "", date_from: str = "", date_to: str = "", page: int = 1, limit: int = 10):
+    if page < 1:
+        raise HTTPException(status_code=422, detail="Page must be at least 1.")
+    if limit < 1 or limit > 100:
+        raise HTTPException(status_code=422, detail="Limit must be between 1 and 100.")
+
     query: dict = {}
     term = search.strip()
     if term:
@@ -97,8 +102,22 @@ async def list_invoices(search: str = "", date_from: str = "", date_to: str = ""
         date_range["$lte"] = date_to
     if date_range:
         query["date"] = date_range
-    docs = await db.invoices.find(query).sort([("created_at", -1)]).to_list(2000)
-    return [_clean(doc) for doc in docs]
+    total = await db.invoices.count_documents(query)
+    total_pages = (total + limit - 1) // limit
+    docs = (
+        await db.invoices.find(query)
+        .sort([("created_at", -1), ("invoice_number", -1)])
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .to_list(limit)
+    )
+    return InvoiceListResponse(
+        invoices=[_clean(doc) for doc in docs],
+        page=page,
+        limit=limit,
+        total=total,
+        total_pages=total_pages,
+    )
 
 
 @router.post("", response_model=Invoice, status_code=201)

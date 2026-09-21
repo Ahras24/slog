@@ -98,7 +98,7 @@ def test_numbering_falls_back_after_db_deletion(client):
         assert inv_c["invoice_number"] == highest["invoice_number"]
 
         # no duplicate invoice_number exists among current invoices
-        all_invoices = client.get("/invoices").json()
+        all_invoices = client.get("/invoices?limit=100").json()["invoices"]
         numbers = [inv["invoice_number"] for inv in all_invoices]
         assert len(numbers) == len(set(numbers)), "Duplicate invoice_number detected"
 

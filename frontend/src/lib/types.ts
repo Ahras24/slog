@@ -61,6 +61,14 @@ export interface Invoice {
   created_at: string;
 }
 
+export interface InvoiceListResponse {
+  invoices: Invoice[];
+  page: number;
+  limit: number;
+  total: number;
+  total_pages: number;
+}
+
 export interface InvoiceCreateItem {
   product_id: string;
   quantity: number;
@@ -91,6 +99,7 @@ export interface DashboardSummary {
   out_of_stock: number;
   today_sales: number;
   today_invoice_count: number;
+  sale_count: number;
 }
 
 export interface StockSalesSummary {
@@ -119,8 +128,12 @@ export interface StockSalesChartPoint {
   sales_amount: number;
 }
 
+export type StockSalesReportType = "daily" | "monthly";
+
 export interface MonthlyStockSalesReport {
   selected_month: string;
+  selected_date?: string | null;
+  report_type?: StockSalesReportType;
   summary: StockSalesSummary;
   products: StockSalesProductRow[];
   chart: StockSalesChartPoint[];

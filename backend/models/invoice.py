@@ -63,3 +63,11 @@ class Invoice(BaseModel):
 class NextInvoiceNumber(BaseModel):
     invoice_number: str
     date: str
+
+
+class InvoiceListResponse(BaseModel):
+    invoices: list[Invoice]
+    page: int
+    limit: int
+    total: int
+    total_pages: int

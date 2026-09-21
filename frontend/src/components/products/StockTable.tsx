@@ -135,78 +135,80 @@ export default function StockTable({ products, isLoading, onEdit, onAddStock, on
         )
       ) : (
         <>
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-slate-50/60 hover:bg-slate-50/60">
-                <TableHead className="w-14 px-3 text-center">SI No</TableHead>
-                <TableHead className="px-4">Product</TableHead>
-                <TableHead className="px-4">Code</TableHead>
-                <TableHead className="px-4 text-right">Stock</TableHead>
-                <TableHead className="px-4 text-right">Unit Price</TableHead>
-                <TableHead className="px-4">Status</TableHead>
-                <TableHead className="px-4 text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pageItems.map((product, index) => (
-                <TableRow key={product.id} data-testid={`product-row-${product.code}`}>
-                  <TableCell
-                    className="px-3 text-center text-slate-500"
-                    data-testid={`product-si-no-${(safePage - 1) * PAGE_SIZE + index + 1}`}
-                  >
-                    {(safePage - 1) * PAGE_SIZE + index + 1}
-                  </TableCell>
-                  <TableCell className="px-4 font-medium text-slate-900">{product.name}</TableCell>
-                  <TableCell className="px-4 font-mono text-xs text-slate-500">{product.code}</TableCell>
-                  <TableCell className="px-4 text-right">
-                    <span
-                      className={cn(
-                        "font-semibold",
-                        product.stock === 0 ? "text-rose-600" : product.stock <= 10 ? "text-amber-600" : "text-slate-900"
-                      )}
-                    >
-                      {product.stock}
-                    </span>
-                  </TableCell>
-                  <TableCell className="px-4 text-right text-slate-700">{formatINR(product.unit_price)}</TableCell>
-                  <TableCell className="px-4">
-                    <StatusBadge status={product.status} />
-                  </TableCell>
-                  <TableCell className="px-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        title="Edit product"
-                        onClick={() => onEdit(product)}
-                        data-testid={`edit-product-btn-${product.code}`}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        title="Add stock"
-                        onClick={() => onAddStock(product)}
-                        data-testid={`add-stock-btn-${product.code}`}
-                      >
-                        <PackagePlus className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        title="Create invoice / sell"
-                        onClick={() => onSell(product)}
-                        data-testid={`sell-product-btn-${product.code}`}
-                      >
-                        <Receipt className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+          <div className="mt-3 border-t border-slate-100 pt-3">
+            <Table className="[&_th:not(:last-child)]:border-r [&_td:not(:last-child)]:border-r [&_th:not(:last-child)]:border-slate-200 [&_td:not(:last-child)]:border-slate-200">
+              <TableHeader>
+                <TableRow className="bg-slate-50/60 hover:bg-slate-50/60">
+                  <TableHead className="w-14 px-3 text-center">SI No</TableHead>
+                  <TableHead className="px-4">Product</TableHead>
+                  <TableHead className="px-4">Code</TableHead>
+                  <TableHead className="px-4 text-right">Stock</TableHead>
+                  <TableHead className="px-4 text-right">Unit Price</TableHead>
+                  <TableHead className="px-4">Status</TableHead>
+                  <TableHead className="px-4 text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {pageItems.map((product, index) => (
+                  <TableRow key={product.id} data-testid={`product-row-${product.code}`}>
+                    <TableCell
+                      className="px-3 text-center text-slate-500"
+                      data-testid={`product-si-no-${(safePage - 1) * PAGE_SIZE + index + 1}`}
+                    >
+                      {(safePage - 1) * PAGE_SIZE + index + 1}
+                    </TableCell>
+                    <TableCell className="px-4 font-medium text-slate-900">{product.name}</TableCell>
+                    <TableCell className="px-4 font-mono text-xs text-slate-500">{product.code}</TableCell>
+                    <TableCell className="px-4 text-right">
+                      <span
+                        className={cn(
+                          "font-semibold",
+                          product.stock === 0 ? "text-rose-600" : product.stock <= 10 ? "text-amber-600" : "text-slate-900"
+                        )}
+                      >
+                        {product.stock}
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-4 text-right text-slate-700">{formatINR(product.unit_price)}</TableCell>
+                    <TableCell className="px-4">
+                      <StatusBadge status={product.status} />
+                    </TableCell>
+                    <TableCell className="px-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          title="Edit product"
+                          onClick={() => onEdit(product)}
+                          data-testid={`edit-product-btn-${product.code}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          title="Add stock"
+                          onClick={() => onAddStock(product)}
+                          data-testid={`add-stock-btn-${product.code}`}
+                        >
+                          <PackagePlus className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          title="Create invoice / sell"
+                          onClick={() => onSell(product)}
+                          data-testid={`sell-product-btn-${product.code}`}
+                        >
+                          <Receipt className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
           <div
             className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3"
             data-testid="stock-pagination"

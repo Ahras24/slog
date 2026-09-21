@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { FilePlus2, IndianRupee, Layers, Package, Receipt, TrendingDown, TrendingUp } from "lucide-react";
+import { FilePlus2, IndianRupee, Layers, Package, PackageCheck, Receipt, TrendingDown, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { fetchDashboard, fetchStockSalesReport, qk } from "@/lib/queries";
 import { formatINR } from "@/lib/format";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "@/lib/recharts";
 import { Search } from "lucide-react";
+import type { StockSalesReportType } from "@/lib/types";
 
 const monthFormat = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" });
 const REPORT_PAGE_SIZE = 10;
@@ -31,6 +32,11 @@ function getMonthOptions(count = 12): string[] {
 export default function Dashboard() {
   const summaryQuery = useQuery({ queryKey: qk.dashboard, queryFn: fetchDashboard });
   const [selectedMonth, setSelectedMonth] = useState(() => formatMonthInput(new Date()));
+  const [reportType, setReportType] = useState<StockSalesReportType>("monthly");
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  });
   const [productSearch, setProductSearch] = useState("");
   const [productPage, setProductPage] = useState(1);
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -38,9 +44,9 @@ export default function Dashboard() {
   const summaryLoading = summaryQuery.isLoading;
 
   const reportQuery = useQuery({
-    queryKey: qk.stockSalesReport(selectedMonth),
-    queryFn: () => fetchStockSalesReport(selectedMonth),
-    enabled: Boolean(selectedMonth),
+    queryKey: qk.stockSalesReport(reportType, reportType === "daily" ? selectedDate : selectedMonth),
+    queryFn: () => fetchStockSalesReport(reportType, reportType === "daily" ? selectedDate : selectedMonth),
+    enabled: Boolean(reportType === "daily" ? selectedDate : selectedMonth),
   });
 
   const monthOptions = useMemo(() => getMonthOptions(12), []);
@@ -109,28 +115,64 @@ export default function Dashboard() {
           icon={Receipt}
           loading={summaryLoading}
         />
+        <SummaryCard
+          testid="metric-sale-count"
+          label="Today's Sale Count"
+          value={summary ? summary.sale_count : "-"}
+          icon={PackageCheck}
+          tone="text-blue-600"
+          loading={summaryLoading}
+        />
       </div>
 
       <Card>
         <CardHeader className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <CardTitle>Monthly Stock & Sales Report</CardTitle>
-            <CardDescription>Track stock inflow, units sold, and sales value for the selected month.</CardDescription>
+            <CardTitle>{reportType === "daily" ? "Daily" : "Monthly"} Stock &amp; Sales Report</CardTitle>
+            <CardDescription>
+              Track stock inflow, units sold, and sales value for the selected {reportType === "daily" ? "day" : "month"}.
+            </CardDescription>
           </div>
-          <div className="w-full max-w-xs">
-            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-500">Month</label>
-            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select month" />
-              </SelectTrigger>
-              <SelectContent>
-                {monthOptions.map((month) => (
-                  <SelectItem key={month} value={month}>
-                    {monthFormat.format(new Date(`${month}-01T00:00:00`))}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex w-full flex-col gap-3 md:w-auto md:min-w-72">
+            <div className="flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
+              {(["daily", "monthly"] as const).map((type) => (
+                <Button
+                  key={type}
+                  type="button"
+                  variant={reportType === type ? "default" : "ghost"}
+                  size="sm"
+                  className="flex-1 capitalize"
+                  onClick={() => setReportType(type)}
+                  data-testid={`report-type-${type}`}
+                >
+                  {type}
+                </Button>
+              ))}
+            </div>
+            {reportType === "daily" ? (
+              <div>
+                <label htmlFor="report-date" className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Date
+                </label>
+                <Input id="report-date" type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} data-testid="report-date-input" />
+              </div>
+            ) : (
+              <div>
+                <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-500">Month</label>
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select month" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {monthOptions.map((month) => (
+                      <SelectItem key={month} value={month}>
+                        {monthFormat.format(new Date(`${month}-01T00:00:00`))}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         </CardHeader>
         <CardContent className="space-y-6 pt-0">
@@ -142,7 +184,7 @@ export default function Dashboard() {
             </div>
           ) : reportQuery.isError || !report ? (
             <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-              Could not load the monthly stock report for {selectedMonth}.
+              Could not load the {reportType} stock report for {reportType === "daily" ? selectedDate : selectedMonth}.
             </div>
           ) : (
             <>
@@ -183,7 +225,7 @@ export default function Dashboard() {
 
               {report.chart.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-10 text-center text-sm text-slate-500">
-                  No stock movement or sales were recorded for {monthFormat.format(new Date(`${selectedMonth}-01T00:00:00`))}.
+                  No stock movement or sales were recorded for {reportType === "daily" ? selectedDate : monthFormat.format(new Date(`${selectedMonth}-01T00:00:00`))}.
                 </div>
               ) : (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -208,7 +250,7 @@ export default function Dashboard() {
                 </div>
               )}
 
-              <div className="overflow-hidden rounded-xl border border-slate-200">
+              <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4">
                   <div>
                     <h3 className="text-sm font-semibold text-slate-800">Product Details</h3>
@@ -225,42 +267,44 @@ export default function Dashboard() {
                     />
                   </div>
                 </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Product Name</TableHead>
-                      <TableHead>Product Code</TableHead>
-                      <TableHead>Opening Stock</TableHead>
-                      <TableHead>Stock Received</TableHead>
-                      <TableHead>Sold Quantity</TableHead>
-                      <TableHead>Closing Stock</TableHead>
-                      <TableHead>Sales Amount</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredProducts.length === 0 ? (
+                <div className="mt-3 border-t border-slate-100 pt-3">
+                  <Table className="[&_th:not(:last-child)]:border-r [&_td:not(:last-child)]:border-r [&_th:not(:last-child)]:border-slate-200 [&_td:not(:last-child)]:border-slate-200">
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={7} className="py-10 text-center text-sm text-slate-500">
-                          {report.products.length === 0
-                            ? "No product history during this month."
-                            : "No products match your search."}
-                        </TableCell>
+                        <TableHead>Product Name</TableHead>
+                        <TableHead>Product Code</TableHead>
+                        <TableHead>Opening Stock</TableHead>
+                        <TableHead>Stock Received</TableHead>
+                        <TableHead>Sold Quantity</TableHead>
+                        <TableHead>Closing Stock</TableHead>
+                        <TableHead>Sales Amount</TableHead>
                       </TableRow>
-                    ) : (
-                      visibleProducts.map((row) => (
-                        <TableRow key={row.product_id}>
-                          <TableCell className="font-medium text-slate-800">{row.product_name}</TableCell>
-                          <TableCell className="font-mono text-xs text-slate-500">{row.product_code}</TableCell>
-                          <TableCell>{row.opening_stock}</TableCell>
-                          <TableCell>{row.stock_received}</TableCell>
-                          <TableCell>{row.sold_quantity}</TableCell>
-                          <TableCell>{row.closing_stock}</TableCell>
-                          <TableCell className="font-medium tabular-nums text-slate-700">{formatINR(row.sales_amount)}</TableCell>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredProducts.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="py-10 text-center text-sm text-slate-500">
+                            {report.products.length === 0
+                              ? "No product history during this month."
+                              : "No products match your search."}
+                          </TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+                      ) : (
+                        visibleProducts.map((row) => (
+                          <TableRow key={row.product_id}>
+                            <TableCell className="font-medium text-slate-800">{row.product_name}</TableCell>
+                            <TableCell className="font-mono text-xs text-slate-500">{row.product_code}</TableCell>
+                            <TableCell>{row.opening_stock}</TableCell>
+                            <TableCell>{row.stock_received}</TableCell>
+                            <TableCell>{row.sold_quantity}</TableCell>
+                            <TableCell>{row.closing_stock}</TableCell>
+                            <TableCell className="font-medium tabular-nums text-slate-700">{formatINR(row.sales_amount)}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3">
                   <span className="text-xs text-slate-500" data-testid="dashboard-product-pagination-range">
                     Showing {productRangeStart}-{productRangeEnd} of {filteredProducts.length} products

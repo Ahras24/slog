@@ -10,3 +10,4 @@ class DashboardSummary(BaseModel):
     out_of_stock: int = 0
     today_sales: float = 0
     today_invoice_count: int = 0
+    sale_count: int = 0
