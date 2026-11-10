@@ -4,6 +4,8 @@ import type {
   Invoice,
   InvoiceCreate,
   InvoiceListResponse,
+  InvoicePaymentCreate,
+  InvoiceStatusFilter,
   MonthlyStockSalesReport,
   NextInvoiceNumber,
   Product,
@@ -18,6 +20,7 @@ export interface InvoiceFilters {
   search?: string;
   date_from?: string;
   date_to?: string;
+  status?: InvoiceStatusFilter;
 }
 
 export interface InvoicePage {
@@ -40,6 +43,7 @@ function toQueryString(filters: InvoiceFilters, page: InvoicePage = {}): string 
   if (filters.search) params.set("search", filters.search);
   if (filters.date_from) params.set("date_from", filters.date_from);
   if (filters.date_to) params.set("date_to", filters.date_to);
+  if (filters.status && filters.status !== "all") params.set("status", filters.status);
   if (page.page !== undefined) params.set("page", String(page.page));
   if (page.limit !== undefined) params.set("limit", String(page.limit));
   const qs = params.toString();
@@ -64,4 +68,6 @@ export const addStock = (id: string, additionalQuantity: number) =>
 export const deleteProduct = (id: string) => apiDelete<void>(`/products/${id}`);
 export const createInvoice = (body: InvoiceCreate) => apiPost<Invoice>("/invoices", body);
 export const deleteInvoice = (id: string) => apiDelete<void>(`/invoices/${id}`);
+export const addInvoicePayment = (id: string, body: InvoicePaymentCreate) =>
+  apiPost<Invoice>(`/invoices/${id}/payments`, body);
 export const updateSettings = (body: StoreSettingsUpdate) => apiPut<StoreSettings>("/settings", body);

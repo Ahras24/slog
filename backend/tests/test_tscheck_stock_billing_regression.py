@@ -109,6 +109,7 @@ def test_stock_and_billing_flow(client):
                 "customer_name": "tscheck-billing-good-customer",
                 "date": today,
                 "payment_method": "Cash(I)",
+                "advance_amount": 750,
                 "items": [
                     {
                         "product_id": product["id"],
@@ -184,6 +185,7 @@ def test_monthly_stock_sales_report_uses_transactions(client):
                 "customer_name": "report-test-customer",
                 "date": today,
                 "payment_method": "Cash(Z)",
+                "advance_amount": 600,
                 "items": [{"product_id": created_product_id, "quantity": 3}],
                 "discount": 0,
             },

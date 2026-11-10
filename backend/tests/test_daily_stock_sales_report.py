@@ -34,6 +34,7 @@ def test_daily_stock_sales_report_uses_daily_movements_and_invoice_prices(client
                     "customer_name": customer,
                     "date": report_date,
                     "payment_method": "Cash",
+                    "advance_amount": 750 if quantity == 3 else 400,
                     "items": [{"product_id": product_id, "quantity": quantity, "unit_price": 250}],
                     "discount": discount,
                 },

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import EmptyState from "@/components/ui/EmptyState";
@@ -79,6 +80,9 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
   const [customer, setCustomer] = useState(EMPTY_CUSTOMER);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
   const [discount, setDiscount] = useState("0");
+  const [gstEnabled, setGstEnabled] = useState(false);
+  const [advanceAmount, setAdvanceAmount] = useState("0");
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [rows, setRows] = useState<ItemRow[]>([{ key: 0, product_id: "", qty: "1" }]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [createdInvoice, setCreatedInvoice] = useState<Invoice | null>(null);
@@ -89,6 +93,9 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
       setCustomer(EMPTY_CUSTOMER);
       setPaymentMethod("");
       setDiscount("0");
+      setGstEnabled(false);
+      setAdvanceAmount("0");
+      setRequestId(crypto.randomUUID());
       rowKey.current += 1;
       setRows([{ key: rowKey.current, product_id: preselectProductId ?? "", qty: "1" }]);
       setCreatedInvoice(null);
@@ -110,18 +117,26 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
   });
 
   const subtotal = Math.round(parsedRows.reduce((sum, entry) => sum + entry.lineTotal, 0) * 100) / 100;
+  const totalPieces = parsedRows.reduce((sum, entry) => sum + entry.qty, 0);
   const discountValue = Number.parseFloat(discount) || 0;
   const discountInvalid = discountValue < 0 || discountValue > subtotal;
-  const totalRaw = Math.round((subtotal - discountValue) * 100) / 100;
+  const discountedSubtotal = Math.round((subtotal - discountValue) * 100) / 100;
+  const gstAmount = gstEnabled ? Math.round(discountedSubtotal * 0.05 * 100) / 100 : 0;
+  const totalRaw = Math.round((discountedSubtotal + gstAmount) * 100) / 100;
   const grandTotal = Math.round(totalRaw);
   const roundOff = Math.round((grandTotal - totalRaw) * 100) / 100;
+  const parsedAdvance = Number.parseFloat(advanceAmount);
+  const advanceValue = Number.isFinite(parsedAdvance) ? parsedAdvance : 0;
+  const advanceInvalid = advanceValue < 0 || advanceValue > grandTotal;
+  const remainingBalance = Math.round((grandTotal - advanceValue) * 100) / 100;
 
   const canSubmit =
     customer.customer_name.trim().length > 0 &&
     paymentMethod !== "" &&
     parsedRows.length > 0 &&
     parsedRows.every((entry) => entry.product && entry.qty >= 1 && !entry.insufficient) &&
-    !discountInvalid;
+    !discountInvalid &&
+    !advanceInvalid;
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -129,21 +144,32 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
         ...customer,
         payment_method: paymentMethod as PaymentMethod,
         discount: discountValue,
+        gst_enabled: gstEnabled,
+        advance_amount: advanceValue,
+        request_id: requestId,
         items: parsedRows
           .filter((entry) => entry.product)
           .map((entry) => ({ product_id: entry.row.product_id, quantity: entry.qty })),
       }),
     onSuccess: async (invoice) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: qk.products }),
-        queryClient.invalidateQueries({ queryKey: qk.dashboard }),
-        queryClient.invalidateQueries({ queryKey: ["invoices"] }),
-        queryClient.invalidateQueries({ queryKey: ["reports"] }),
+        queryClient.invalidateQueries({ queryKey: qk.products, refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: qk.dashboard, refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: ["invoices"], refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: ["reports"], refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: qk.nextInvoiceNumber, refetchType: "all" }),
       ]);
-      toast.success(`Invoice ${invoice.invoice_number} created. Stock updated.`);
+      toast.success(
+        invoice.status === "Finalized"
+          ? `Invoice ${invoice.invoice_number} finalized. Stock updated.`
+          : `Invoice ${invoice.invoice_number} saved as pending. Stock updated.`
+      );
       setCustomer(EMPTY_CUSTOMER);
       setPaymentMethod("");
       setDiscount("0");
+      setGstEnabled(false);
+      setAdvanceAmount("0");
+      setRequestId(crypto.randomUUID());
       rowKey.current += 1;
       setRows([{ key: rowKey.current, product_id: "", qty: "1" }]);
       setConfirmOpen(false);
@@ -184,7 +210,7 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
           <DialogHeader>
             <DialogTitle>Create Invoice</DialogTitle>
             <DialogDescription>
-              Number INV-XXXXX is assigned automatically. Stock is deducted when the invoice is finalized.
+              Invoice number is assigned automatically. Stock is deducted when the invoice is saved.
             </DialogDescription>
           </DialogHeader>
 
@@ -409,6 +435,12 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center justify-between py-1 text-sm">
+                    <span className="text-slate-500">Total Pieces</span>
+                    <span className="font-medium tabular-nums" data-testid="invoice-total-pieces-display">
+                      {totalPieces}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-1 text-sm">
                     <span className="text-slate-500">Subtotal</span>
                     <span className="font-medium tabular-nums" data-testid="invoice-subtotal-display">
                       {formatINR(subtotal)}
@@ -433,6 +465,21 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
                       </p>
                     ) : null}
                   </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="invoice-gst"
+                      checked={gstEnabled}
+                      onCheckedChange={(checked) => setGstEnabled(checked === true)}
+                      data-testid="invoice-gst-checkbox"
+                    />
+                    <Label htmlFor="invoice-gst">Apply GST (5%)</Label>
+                  </div>
+                  {gstEnabled ? (
+                    <div className="flex items-center justify-between py-1 text-sm" data-testid="invoice-gst-display">
+                      <span className="text-slate-500">GST (5%)</span>
+                      <span className="font-medium tabular-nums">{formatINR(gstAmount)}</span>
+                    </div>
+                  ) : null}
                   {roundOff !== 0 ? (
                     <div className="flex items-center justify-between py-1 text-sm">
                       <span className="text-slate-500">Round-Off</span>
@@ -442,9 +489,34 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
                     </div>
                   ) : null}
                   <div className="mt-2 flex items-center justify-between rounded-lg bg-slate-100 px-4 py-3">
-                    <span className="text-sm font-semibold text-slate-700">Total</span>
+                    <span className="text-sm font-semibold text-slate-700">Grand Total</span>
                     <span className="text-lg font-bold tabular-nums text-slate-900" data-testid="invoice-total-display">
                       {formatINR(grandTotal)}
+                    </span>
+                  </div>
+                  <div className="grid gap-2 pt-2">
+                    <Label htmlFor="invoice-advance-amount">Advance Amount (₹)</Label>
+                    <Input
+                      id="invoice-advance-amount"
+                      type="number"
+                      min={0}
+                      max={grandTotal}
+                      step="0.01"
+                      value={advanceAmount}
+                      onChange={(event) => setAdvanceAmount(event.target.value)}
+                      data-enter-field
+                      data-testid="invoice-advance-amount-input"
+                    />
+                    {advanceInvalid ? (
+                      <p className="text-xs font-medium text-rose-600" data-testid="invoice-advance-error">
+                        Advance must be between ₹0 and the invoice total.
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center justify-between py-1 text-sm">
+                    <span className="text-slate-500">Remaining Balance</span>
+                    <span className="font-medium tabular-nums" data-testid="invoice-remaining-balance-display">
+                      {formatINR(remainingBalance)}
                     </span>
                   </div>
                   <Button
@@ -454,9 +526,9 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
                     data-testid="invoice-submit-btn"
                   >
                     {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCheck2 className="h-4 w-4" />}
-                    Finalize Invoice
+                    {remainingBalance === 0 ? "Finalize Invoice" : "Save Pending Invoice"}
                   </Button>
-                  <p className="mt-2 text-center text-xs text-slate-400">Stock is deducted only after you finalize.</p>
+                  <p className="mt-2 text-center text-xs text-slate-400">Stock is deducted when the invoice is saved.</p>
                 </CardContent>
               </Card>
             </div>
@@ -467,9 +539,9 @@ export default function InvoiceBuilderModal({ open, onOpenChange, preselectProdu
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title="Finalize invoice?"
-        description={`Stock will be deducted and ${nextNumberQuery.data?.invoice_number ?? "the invoice"} saved to history. This cannot be undone.`}
-        confirmLabel="Finalize & Save"
+        title={remainingBalance === 0 ? "Finalize invoice?" : "Save pending invoice?"}
+        description={`Stock will be deducted and ${nextNumberQuery.data?.invoice_number ?? "the invoice"} saved with a remaining balance of ${formatINR(remainingBalance)}. This cannot be undone.`}
+        confirmLabel={remainingBalance === 0 ? "Finalize & Save" : "Save Pending"}
         autoFocusConfirm
         loading={mutation.isPending}
         onConfirm={() => mutation.mutate()}

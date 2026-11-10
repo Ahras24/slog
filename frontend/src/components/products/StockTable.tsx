@@ -15,7 +15,6 @@ const PAGE_SIZE = 10;
 const FILTERS: { value: StockFilter; label: string; testid: string }[] = [
   { value: "all", label: "All", testid: "filter-tab-all" },
   { value: "in_stock", label: "In Stock", testid: "filter-tab-in-stock" },
-  { value: "low_stock", label: "Low Stock", testid: "filter-tab-low-stock" },
   { value: "out_of_stock", label: "Out of Stock", testid: "filter-tab-out-of-stock" },
 ];
 
@@ -38,8 +37,7 @@ export default function StockTable({ products, isLoading, onEdit, onAddStock, on
     const list = products ?? [];
     return {
       all: list.length,
-      in_stock: list.filter((p) => p.status === "in_stock").length,
-      low_stock: list.filter((p) => p.status === "low_stock").length,
+      in_stock: list.filter((p) => p.status === "in_stock" || p.status === "low_stock").length,
       out_of_stock: list.filter((p) => p.status === "out_of_stock").length,
     };
   }, [products]);
@@ -47,7 +45,8 @@ export default function StockTable({ products, isLoading, onEdit, onAddStock, on
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return (products ?? []).filter((product) => {
-      if (filter !== "all" && product.status !== filter) return false;
+      if (filter === "in_stock" && product.status === "out_of_stock") return false;
+      if (filter === "out_of_stock" && product.status !== "out_of_stock") return false;
       if (!term) return true;
       return product.name.toLowerCase().includes(term) || product.code.toLowerCase().includes(term);
     });

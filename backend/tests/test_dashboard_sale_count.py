@@ -42,6 +42,7 @@ def test_dashboard_sale_count_sums_invoice_quantities(client):
                 "customer_name": "tscheck-dashboard-sale-count",
                 "date": today,
                 "payment_method": "Cash",
+                "advance_amount": 80,
                 "items": [
                     {"product_id": products[0]["id"], "quantity": 3},
                     {"product_id": products[1]["id"], "quantity": 5},

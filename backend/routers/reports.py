@@ -45,13 +45,24 @@ def _transaction_date(value: object) -> str:
     return str(value)[:10]
 
 
+def _invoice_sales_date(invoice: dict) -> str | None:
+    if invoice.get("status", "Finalized").lower() == "pending":
+        return None
+    finalized_at = invoice.get("finalized_at")
+    return _transaction_date(finalized_at) if finalized_at is not None else invoice.get("date")
+
+
 def _invoice_item_net_amount(invoice: dict, item: dict) -> float:
     item_total = float(item.get("total", 0) or 0)
     subtotal = float(invoice.get("subtotal", 0) or 0)
     discount = float(invoice.get("discount", 0) or 0)
-    if subtotal <= 0 or discount <= 0:
+    if subtotal <= 0:
         return item_total
-    return max(0.0, item_total - discount * (item_total / subtotal))
+    item_share = item_total / subtotal
+    item_discount = discount * item_share
+    item_gst = float(invoice.get("gst_amount", 0) or 0) * item_share
+    item_round_off = float(invoice.get("round_off", 0) or 0) * item_share
+    return max(0.0, item_total - item_discount + item_gst + item_round_off)
 
 
 async def _daily_stock_sales_report(selected_date: str) -> dict:
@@ -65,6 +76,7 @@ async def _daily_stock_sales_report(selected_date: str) -> dict:
             "received": 0,
             "initial_stock": 0,
             "sold": 0,
+            "stock_sold": 0,
             "sales_amount": 0.0,
             "received_after": 0,
             "sold_after": 0,
@@ -75,6 +87,7 @@ async def _daily_stock_sales_report(selected_date: str) -> dict:
         for product in products
     }
 
+    invoices = await db.invoices.find({}).to_list(20000)
     transactions = await db.stock_transactions.find({}).to_list(20000)
     sold_references: set[tuple[str, str]] = set()
     for txn in transactions:
@@ -92,8 +105,7 @@ async def _daily_stock_sales_report(selected_date: str) -> dict:
             if reference_id:
                 sold_references.add((reference_id, product_id))
             if movement_date == selected_date:
-                row["sold"] += quantity
-                row["sales_amount"] += float(txn.get("unit_price") or 0) * quantity
+                row["stock_sold"] += quantity
                 row["sold_after"] += quantity
             elif movement_date >= selected_date:
                 row["sold_after"] += quantity
@@ -109,7 +121,6 @@ async def _daily_stock_sales_report(selected_date: str) -> dict:
             elif movement_date > selected_date:
                 row["received_after"] += quantity
 
-    invoices = await db.invoices.find({}).to_list(20000)
     for invoice in invoices:
         invoice_date = invoice.get("date")
         if not invoice_date:
@@ -120,19 +131,18 @@ async def _daily_stock_sales_report(selected_date: str) -> dict:
             if row is None:
                 continue
             quantity = int(item.get("quantity", 0))
-            if invoice_date == selected_date and (invoice.get("id"), product_id) in sold_references:
-                row["sales_amount"] -= float(invoice.get("discount", 0) or 0) * (
-                    float(item.get("total", 0) or 0) / float(invoice.get("subtotal", 1) or 1)
-                )
-                continue
-            if invoice_date == selected_date:
+            has_stock_transaction = (invoice.get("id"), product_id) in sold_references
+            if not has_stock_transaction:
+                row["all_sold"] += quantity
+                if invoice_date == selected_date:
+                    row["stock_sold"] += quantity
+                    row["sold_after"] += quantity
+                elif invoice_date >= selected_date:
+                    row["sold_after"] += quantity
+
+            if _invoice_sales_date(invoice) == selected_date:
                 row["sold"] += quantity
                 row["sales_amount"] += _invoice_item_net_amount(invoice, item)
-                row["sold_after"] += quantity
-                row["all_sold"] += quantity
-            elif invoice_date >= selected_date:
-                row["sold_after"] += quantity
-                row["all_sold"] += quantity
 
     received_product_ids = {txn.get("product_id") for txn in transactions if txn.get("transaction_type") == "received"}
     for row in rows.values():
@@ -152,7 +162,7 @@ async def _daily_stock_sales_report(selected_date: str) -> dict:
         received = int(row["received"])
         sold = int(row["sold"])
         sales_amount = round(float(row["sales_amount"]), 2)
-        closing_stock = opening_stock + received - sold
+        closing_stock = opening_stock + received - int(row["stock_sold"])
         total_received += received + int(row["initial_stock"])
         total_sold += sold
         total_sales_amount += sales_amount
@@ -181,6 +191,12 @@ async def _daily_stock_sales_report(selected_date: str) -> dict:
                     "sales_amount": sales_amount,
                 }
             )
+
+    total_sales_amount = sum(
+        float(invoice.get("total", 0) or 0)
+        for invoice in invoices
+        if _invoice_sales_date(invoice) == selected_date
+    )
 
     return {
         "selected_month": selected_date,
@@ -220,12 +236,14 @@ async def stock_sales_report(
             "stock_received": 0,
             "initial_stock": 0,
             "sold_quantity": 0,
+            "stock_sold_quantity": 0,
             "sales_amount": 0.0,
             "all_sold": 0,
             "all_received": 0,
             "created_at": product.get("created_at"),
         }
 
+    invoice_docs = await db.invoices.find({}).to_list(20000)
     transactions = await db.stock_transactions.find({}).to_list(20000)
     sold_references: set[tuple[str, str]] = set()
     for txn in transactions:
@@ -238,6 +256,9 @@ async def stock_sales_report(
         if created_at is None:
             continue
         created_date = _transaction_date(created_at)
+        reference_id = txn.get("reference_id")
+        if txn.get("transaction_type") == "sold" and reference_id:
+            sold_references.add((reference_id, product_id))
         if txn.get("transaction_type") == "received":
             row["all_received"] += qty
             if txn.get("reference_id") == product_id:
@@ -249,14 +270,8 @@ async def stock_sales_report(
                 if txn.get("reference_id") != product_id:
                     row["stock_received"] += qty
             elif txn.get("transaction_type") == "sold":
-                row["sold_quantity"] += qty
-                if txn.get("unit_price") is not None:
-                    row["sales_amount"] += float(txn["unit_price"]) * qty
-                reference_id = txn.get("reference_id")
-                if reference_id:
-                    sold_references.add((reference_id, product_id))
+                row["stock_sold_quantity"] += qty
 
-    invoice_docs = await db.invoices.find({}).to_list(20000)
     for invoice in invoice_docs:
         invoice_date = invoice.get("date")
         if not invoice_date:
@@ -266,14 +281,17 @@ async def stock_sales_report(
             row = rows.get(product_id)
             if row is None:
                 continue
-            if month_start_str <= invoice_date < month_end_str:
-                if (invoice.get("id"), product_id) in sold_references:
-                    row["sales_amount"] -= float(invoice.get("discount", 0) or 0) * (
-                        float(item.get("total", 0) or 0) / float(invoice.get("subtotal", 1) or 1)
-                    )
-                    continue
-                row["sold_quantity"] += int(item.get("quantity", 0))
+            has_stock_transaction = (invoice.get("id"), product_id) in sold_references
+            if not has_stock_transaction:
+                quantity = int(item.get("quantity", 0))
                 row["all_sold"] += int(item.get("quantity", 0))
+                if month_start_str <= invoice_date < month_end_str:
+                    row["stock_sold_quantity"] += quantity
+
+            sales_date = _invoice_sales_date(invoice)
+            if sales_date and month_start_str <= sales_date < month_end_str:
+                quantity = int(item.get("quantity", 0))
+                row["sold_quantity"] += quantity
                 row["sales_amount"] += _invoice_item_net_amount(invoice, item)
 
     received_product_ids = {txn.get("product_id") for txn in transactions if txn.get("transaction_type") == "received"}
@@ -294,7 +312,7 @@ async def stock_sales_report(
         stock_received = int(row["stock_received"])
         sold_quantity = int(row["sold_quantity"])
         opening_stock = int(row["initial_stock"])
-        closing_stock = opening_stock + stock_received - sold_quantity
+        closing_stock = opening_stock + stock_received - int(row["stock_sold_quantity"])
         sales_amount = round(float(row["sales_amount"]), 2)
 
         total_received += stock_received + int(row["initial_stock"])
@@ -326,6 +344,13 @@ async def stock_sales_report(
                     "sales_amount": sales_amount,
                 }
             )
+
+    total_sales_amount = sum(
+        float(invoice.get("total", 0) or 0)
+        for invoice in invoice_docs
+        if (sales_date := _invoice_sales_date(invoice)) is not None
+        and month_start_str <= sales_date < month_end_str
+    )
 
     note = None
     if not await db.stock_transactions.count_documents({}):

@@ -20,6 +20,7 @@ export default function InvoiceSheet({ invoice }: { invoice: Invoice }) {
     invoice.phone,
     invoice.email,
   ].filter((line) => line.trim().length > 0);
+  const totalPieces = invoice.items.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <div className="font-invoice bg-white text-[#111827]" data-testid="invoice-sheet">
@@ -33,6 +34,14 @@ export default function InvoiceSheet({ invoice }: { invoice: Invoice }) {
             </span>
           </div>
           <div className="mt-2 text-sm font-bold">{formatInvoiceDate(invoice.date)}</div>
+          <div
+            className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${
+              invoice.status.toLowerCase() === "pending" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
+            }`}
+            data-testid="invoice-sheet-status"
+          >
+            {invoice.status}
+          </div>
           <div className="mt-1 text-sm" data-testid="invoice-sheet-payment-method">
             Payment Method: {invoice.payment_method ?? "Not specified"}
           </div>
@@ -76,12 +85,16 @@ export default function InvoiceSheet({ invoice }: { invoice: Invoice }) {
 
       <div className="mt-6 flex justify-end">
         <div className="w-full max-w-xs">
+          <TotalsRow label="Total Pieces:" value={String(totalPieces)} testid="invoice-sheet-total-pieces" />
           <TotalsRow label="Sub total:" value={formatINR(invoice.subtotal)} testid="invoice-sheet-subtotal" />
-          {invoice.round_off !== 0 ? (
-            <TotalsRow label="Round-Off:" value={formatINR(invoice.round_off)} testid="invoice-sheet-roundoff" />
-          ) : null}
           {invoice.discount > 0 ? (
             <TotalsRow label="Discount:" value={`- ${formatINR(invoice.discount)}`} testid="invoice-sheet-discount" />
+          ) : null}
+          {invoice.gst_enabled ? (
+            <TotalsRow label="GST (5%):" value={formatINR(invoice.gst_amount ?? 0)} testid="invoice-sheet-gst" />
+          ) : null}
+          {invoice.round_off !== 0 ? (
+            <TotalsRow label="Round-Off:" value={formatINR(invoice.round_off)} testid="invoice-sheet-roundoff" />
           ) : null}
           <div
             className="mt-2 flex items-center justify-between gap-4 rounded-md bg-[#F4EFE6] px-4 py-3"
@@ -90,6 +103,31 @@ export default function InvoiceSheet({ invoice }: { invoice: Invoice }) {
             <span className="text-base font-extrabold tracking-wide">TOTAL:</span>
             <span className="text-lg font-extrabold tabular-nums">{formatINR(invoice.total)}</span>
           </div>
+          <TotalsRow
+            label={invoice.status.toLowerCase() === "pending" ? "Advance Paid:" : "Total Paid:"}
+            value={formatINR(invoice.total_paid)}
+            testid="invoice-sheet-total-paid"
+          />
+          {invoice.status.toLowerCase() === "pending" ? (
+            <TotalsRow
+              label="Remaining Balance:"
+              value={formatINR(invoice.remaining_balance)}
+              testid="invoice-sheet-remaining-balance"
+            />
+          ) : null}
+          {invoice.payments.length > 0 ? (
+            <div className="mt-3 border-t border-[#E5E7EB] pt-2" data-testid="invoice-sheet-payments">
+              <div className="mb-1 text-xs font-bold uppercase tracking-wider text-[#6B7280]">Payment History</div>
+              {invoice.payments.map((payment) => (
+                <div key={payment.id} className="flex items-start justify-between gap-4 py-1 text-xs">
+                  <span className="text-[#6B7280]">
+                    {payment.payment_method} · {new Date(payment.paid_at).toLocaleString()}
+                  </span>
+                  <span className="font-semibold tabular-nums">{formatINR(payment.amount)}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
 

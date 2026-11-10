@@ -1,4 +1,5 @@
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { History, LayoutDashboard, Package, Settings, Store } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -115,7 +116,30 @@ function BottomNav() {
 }
 
 export default function AppLayout() {
+  const navigate = useNavigate();
   const { data: settings } = useQuery({ queryKey: qk.settings, queryFn: fetchSettings, retry: false });
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "F2") return;
+
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || target.closest("input, textarea, select, [role='combobox']"))
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      if (event.repeat) return;
+
+      navigate("/products", { state: { openAddProduct: true } });
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [navigate]);
 
   return (
     <div className="min-h-svh bg-[#F8FAFC]">

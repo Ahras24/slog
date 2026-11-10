@@ -33,6 +33,7 @@ def test_dashboard_net_sales_and_initial_stock(client):
                 "customer_name": "dashboard-net-sales-customer",
                 "date": today,
                 "payment_method": "Cash",
+                "advance_amount": 190,
                 "items": [{"product_id": product_id, "quantity": 2}],
                 "discount": 10,
             },

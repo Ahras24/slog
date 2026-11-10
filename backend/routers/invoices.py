@@ -9,7 +9,15 @@ from fastapi import APIRouter, HTTPException
 
 from lib.dates import today_iso
 from lib.db import db
-from models.invoice import Invoice, InvoiceCreate, InvoiceItem, InvoiceListResponse, NextInvoiceNumber
+from models.invoice import (
+    Invoice,
+    InvoiceCreate,
+    InvoiceItem,
+    InvoiceListResponse,
+    InvoicePayment,
+    InvoicePaymentCreate,
+    NextInvoiceNumber,
+)
 from models.product import utcnow
 from models.settings import DEFAULT_INVOICE_PREFIX
 from models.stock_transaction import StockTransaction
@@ -48,18 +56,21 @@ async def _highest_existing_seq() -> int:
     return max((_parse_seq(doc.get("invoice_number", "")) for doc in numbers), default=0)
 
 
-async def _reserve_invoice_number(prefix: str) -> str:
-    """Assign the next number, reconciled against the invoices actually stored.
-
-    The counter alone goes stale whenever invoices are deleted (numbering would keep
-    climbing past an empty history), so it is realigned to the real maximum first —
-    downwards after deletions, upwards if it ever lagged behind. The sequence is shared
-    across prefixes: changing the prefix renames future numbers, it does not restart them.
-    """
+async def _reconcile_invoice_counter() -> int:
     highest = await _highest_existing_seq()
     counter = await db.counters.find_one({"_id": "invoice"})
     if (counter or {}).get("seq", 0) != highest:
         await db.counters.update_one({"_id": "invoice"}, {"$set": {"seq": highest}}, upsert=True)
+    return highest
+
+
+async def _reserve_invoice_number(prefix: str) -> str:
+    """Reserve the next number from the highest sequence among stored invoices.
+
+    The sequence is shared across prefixes: changing the prefix renames future numbers,
+    it does not restart them.
+    """
+    await _reconcile_invoice_counter()
     updated = await db.counters.find_one_and_update(
         {"_id": "invoice"},
         {"$inc": {"seq": 1}},
@@ -80,11 +91,21 @@ async def next_invoice_number():
 
 
 @router.get("", response_model=InvoiceListResponse)
-async def list_invoices(search: str = "", date_from: str = "", date_to: str = "", page: int = 1, limit: int = 10):
+async def list_invoices(
+    search: str = "",
+    date_from: str = "",
+    date_to: str = "",
+    status: str = "all",
+    page: int = 1,
+    limit: int = 10,
+):
     if page < 1:
         raise HTTPException(status_code=422, detail="Page must be at least 1.")
     if limit < 1 or limit > 100:
         raise HTTPException(status_code=422, detail="Limit must be between 1 and 100.")
+    normalized_status = status.strip().lower()
+    if normalized_status not in {"all", "pending", "finalized"}:
+        raise HTTPException(status_code=422, detail="Status must be all, pending, or finalized.")
     today = today_iso()
     for label, value in (("From", date_from), ("To", date_to)):
         if value:
@@ -113,6 +134,17 @@ async def list_invoices(search: str = "", date_from: str = "", date_to: str = ""
         date_range["$lte"] = date_to
     if date_range:
         query["date"] = date_range
+    if normalized_status == "pending":
+        query["status"] = {"$in": ["Pending", "pending"]}
+    elif normalized_status == "finalized":
+        query["$and"] = [
+            {
+                "$or": [
+                    {"status": {"$in": ["Finalized", "finalized"]}},
+                    {"status": {"$exists": False}},
+                ]
+            }
+        ]
     total = await db.invoices.count_documents(query)
     total_pages = (total + limit - 1) // limit
     docs = (
@@ -133,6 +165,10 @@ async def list_invoices(search: str = "", date_from: str = "", date_to: str = ""
 
 @router.post("", response_model=Invoice, status_code=201)
 async def create_invoice(input: InvoiceCreate):
+    existing_request = await db.invoices.find_one({"request_id": input.request_id})
+    if existing_request:
+        return _clean(existing_request)
+
     date = today_iso()
     submitted_date = (input.date or "").strip()
     if submitted_date and submitted_date != date:
@@ -166,26 +202,70 @@ async def create_invoice(input: InvoiceCreate):
     discount = round(input.discount, 2)
     if discount > subtotal:
         raise HTTPException(status_code=400, detail="Discount cannot exceed the subtotal.")
-    total_raw = round(subtotal - discount, 2)
+    discounted_subtotal = round(subtotal - discount, 2)
+    gst_amount = round(discounted_subtotal * 0.05, 2) if input.gst_enabled else 0.0
+    total_raw = round(discounted_subtotal + gst_amount, 2)
     grand_total = round(total_raw)
     round_off = round(grand_total - total_raw, 2)
+    advance_amount = round(input.advance_amount, 2)
+    if advance_amount > grand_total:
+        raise HTTPException(status_code=400, detail="Advance amount cannot exceed the invoice total.")
+    total_paid = advance_amount
+    remaining_balance = round(grand_total - total_paid, 2)
+    status = "Finalized" if remaining_balance == 0 else "Pending"
+    now = utcnow()
+    payments = (
+        [
+            InvoicePayment(
+                id=f"{input.request_id}:initial",
+                amount=advance_amount,
+                payment_method=input.payment_method,
+                paid_at=now,
+            )
+        ]
+        if advance_amount > 0
+        else []
+    )
 
     # Atomic, all-or-nothing stock deduction: each decrement is guarded on stock >= qty.
     deducted: list[tuple[str, int]] = []
+    quantities: dict[str, int] = {}
     for item in items:
+        quantities[item.product_id] = quantities.get(item.product_id, 0) + item.quantity
+    for product_id, quantity in quantities.items():
         updated = await db.products.find_one_and_update(
-            {"id": item.product_id, "stock": {"$gte": item.quantity}},
-            {"$inc": {"stock": -item.quantity}, "$set": {"updated_at": utcnow()}},
+            {
+                "id": product_id,
+                "stock": {"$gte": quantity},
+                "_deducted_invoice_request_ids": {"$ne": input.request_id},
+            },
+            {
+                "$inc": {"stock": -quantity},
+                "$addToSet": {"_deducted_invoice_request_ids": input.request_id},
+                "$set": {"updated_at": utcnow()},
+            },
         )
         if updated is None:
-            for product_id, quantity in deducted:  # roll back what was already taken
-                await db.products.update_one({"id": product_id}, {"$inc": {"stock": quantity}})
-            product = by_id[item.product_id]
+            already_deducted = await db.products.find_one(
+                {"id": product_id, "_deducted_invoice_request_ids": input.request_id},
+                {"_id": 1},
+            )
+            if already_deducted:
+                continue
+            for product_id, quantity in deducted:
+                await db.products.update_one(
+                    {"id": product_id},
+                    {
+                        "$inc": {"stock": quantity},
+                        "$pull": {"_deducted_invoice_request_ids": input.request_id},
+                    },
+                )
+            product = by_id[product_id]
             raise HTTPException(
                 status_code=409,
                 detail=f"Insufficient stock available for {product['name']}.",
             )
-        deducted.append((item.product_id, item.quantity))
+        deducted.append((product_id, quantity))
 
     settings = await db.store_settings.find_one({"id": "store"}) or {}
     prefix = (settings.get("invoice_prefix") or DEFAULT_INVOICE_PREFIX).strip() or DEFAULT_INVOICE_PREFIX
@@ -207,34 +287,62 @@ async def create_invoice(input: InvoiceCreate):
             items=items,
             subtotal=subtotal,
             discount=discount,
+            gst_enabled=input.gst_enabled,
+            gst_amount=gst_amount,
             round_off=round_off,
             total=float(grand_total),
+            total_paid=total_paid,
+            remaining_balance=remaining_balance,
+            payments=payments,
+            request_id=input.request_id,
+            stock_deducted=True,
+            status=status,
+            finalized_at=now if status == "Finalized" else None,
             store_phone=(settings.get("phone") or ""),
         )
         try:
             await db.invoices.insert_one(invoice.model_dump())
-            for item in invoice.items:
+            for product_id, quantity in quantities.items():
                 existing = await db.stock_transactions.find_one(
-                    {"reference_id": invoice.id, "product_id": item.product_id, "transaction_type": "sold"}
+                    {"reference_id": invoice.id, "product_id": product_id, "transaction_type": "sold"}
                 )
                 if existing:
                     continue
+                product_items = [item for item in invoice.items if item.product_id == product_id]
+                product = product_items[0]
                 transaction = StockTransaction(
-                    product_id=item.product_id,
-                    product_name=item.product_name,
-                    product_code=item.product_code,
+                    product_id=product_id,
+                    product_name=product.product_name,
+                    product_code=product.product_code,
                     transaction_type="sold",
-                    quantity=item.quantity,
-                    unit_price=float(item.unit_price),
+                    quantity=quantity,
+                    unit_price=sum(item.total for item in product_items) / quantity,
                     reference_id=invoice.id,
                 )
                 await db.stock_transactions.insert_one(transaction.model_dump())
             return invoice
         except DuplicateKeyError as exc:
             last_error = exc
+            existing_request = await db.invoices.find_one({"request_id": input.request_id})
+            if existing_request:
+                for product_id, quantity in deducted:
+                    await db.products.update_one(
+                        {"id": product_id},
+                        {
+                            "$inc": {"stock": quantity},
+                            "$pull": {"_deducted_invoice_request_ids": input.request_id},
+                        },
+                    )
+                return _clean(existing_request)
 
-    for product_id, quantity in deducted:  # numbering exhausted its retries: give the stock back
-        await db.products.update_one({"id": product_id}, {"$inc": {"stock": quantity}})
+    for product_id, quantity in deducted:
+        await db.products.update_one(
+            {"id": product_id},
+            {
+                "$inc": {"stock": quantity},
+                "$pull": {"_deducted_invoice_request_ids": input.request_id},
+            },
+        )
     raise HTTPException(status_code=409, detail="Could not assign a unique invoice number. Please try again.") from last_error
 
 
@@ -246,11 +354,121 @@ async def get_invoice(invoice_id: str):
     return _clean(doc)
 
 
+@router.post("/{invoice_id}/payments", response_model=Invoice)
+async def add_invoice_payment(invoice_id: str, payment: InvoicePaymentCreate):
+    invoice = await db.invoices.find_one({"id": invoice_id})
+    if invoice is None:
+        raise HTTPException(status_code=404, detail="Invoice not found.")
+
+    existing_payment = next(
+        (saved for saved in invoice.get("payments", []) if saved.get("id") == payment.id),
+        None,
+    )
+    if existing_payment:
+        return _clean(invoice)
+    if invoice.get("status", "Finalized").lower() != "pending":
+        raise HTTPException(status_code=409, detail="Only pending invoices can receive payments.")
+
+    amount = round(payment.amount, 2)
+    total = round(float(invoice.get("total", 0)), 2)
+    total_paid = round(float(invoice.get("total_paid", 0)), 2)
+    remaining = round(float(invoice.get("remaining_balance", total - total_paid)), 2)
+    if amount <= 0:
+        raise HTTPException(status_code=422, detail="Payment amount must be greater than zero.")
+    if amount > remaining:
+        raise HTTPException(status_code=400, detail="Payment cannot exceed the remaining balance.")
+
+    now = utcnow()
+    paid_expression = {
+        "$round": [{"$add": [{"$ifNull": ["$total_paid", 0]}, amount]}, 2]
+    }
+    remaining_expression = {
+        "$round": [{"$subtract": [{"$ifNull": ["$remaining_balance", total]}, amount]}, 2]
+    }
+    updated = await db.invoices.find_one_and_update(
+        {
+            "id": invoice_id,
+            "status": {"$in": ["Pending", "pending"]},
+            "remaining_balance": {"$gte": amount},
+            "payments.id": {"$ne": payment.id},
+        },
+        [
+            {
+                "$set": {
+                    "payments": {
+                        "$concatArrays": [
+                            {"$ifNull": ["$payments", []]},
+                            [
+                                InvoicePayment(
+                                    id=payment.id,
+                                    amount=amount,
+                                    payment_method=payment.payment_method,
+                                    paid_at=now,
+                                ).model_dump()
+                            ],
+                        ]
+                    },
+                    "total_paid": paid_expression,
+                    "remaining_balance": remaining_expression,
+                    "status": {
+                        "$cond": [{"$eq": [remaining_expression, 0]}, "Finalized", "Pending"]
+                    },
+                    "finalized_at": {
+                        "$cond": [
+                            {"$eq": [remaining_expression, 0]},
+                            now,
+                            {"$ifNull": ["$finalized_at", None]},
+                        ]
+                    },
+                }
+            }
+        ],
+        return_document=ReturnDocument.AFTER,
+    )
+    if updated is None:
+        current = await db.invoices.find_one({"id": invoice_id})
+        if current and any(saved.get("id") == payment.id for saved in current.get("payments", [])):
+            return _clean(current)
+        if current is None:
+            raise HTTPException(status_code=404, detail="Invoice not found.")
+        if current.get("status", "Finalized").lower() != "pending":
+            raise HTTPException(status_code=409, detail="Only pending invoices can receive payments.")
+        raise HTTPException(status_code=400, detail="Payment exceeds the remaining balance.")
+    return _clean(updated)
+
+
 @router.delete("/{invoice_id}", status_code=204)
 async def delete_invoice(invoice_id: str):
-    """Remove an invoice record. Stock is deliberately left as-is — deleting the record
-    does not un-sell the goods; use Add Stock if the items came back."""
+    """Restore sold stock and remove all invoice-backed sales records."""
+    invoice = await db.invoices.find_one({"id": invoice_id})
+    if invoice is None:
+        raise HTTPException(status_code=404, detail="Invoice not found.")
+
+    quantities: dict[str, int] = {}
+    for item in invoice.get("items", []):
+        product_id = item.get("product_id")
+        quantity = int(item.get("quantity", 0))
+        if product_id and quantity > 0:
+            quantities[product_id] = quantities.get(product_id, 0) + quantity
+
+    for product_id, quantity in quantities.items():
+        # The stock update and marker are one atomic document update. Retaining the
+        # marker makes retries/concurrent delete requests safe on standalone MongoDB.
+        await db.products.update_one(
+            {"id": product_id, "_restored_invoice_ids": {"$ne": invoice_id}},
+            {
+                "$inc": {"stock": quantity},
+                "$addToSet": {"_restored_invoice_ids": invoice_id},
+                "$pull": {"_deducted_invoice_request_ids": invoice.get("request_id")},
+                "$set": {"updated_at": utcnow()},
+            },
+        )
+
+    await db.stock_transactions.delete_many(
+        {"reference_id": invoice_id, "transaction_type": "sold"}
+    )
     result = await db.invoices.delete_one({"id": invoice_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Invoice not found.")
+    await _reconcile_invoice_counter()
     return None

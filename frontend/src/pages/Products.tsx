@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,18 @@ import InvoiceBuilderModal from "@/components/invoices/InvoiceBuilderModal";
 import { fetchProducts, qk } from "@/lib/queries";
 import type { Product } from "@/lib/types";
 
+function hasAddProductRequest(state: unknown): boolean {
+  return (
+    typeof state === "object" &&
+    state !== null &&
+    "openAddProduct" in state &&
+    state.openAddProduct === true
+  );
+}
+
 export default function Products() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const productsQuery = useQuery({ queryKey: qk.products, queryFn: fetchProducts });
 
   const [formOpen, setFormOpen] = useState(false);
@@ -19,6 +31,21 @@ export default function Products() {
   const [builderOpen, setBuilderOpen] = useState(false);
   const [sellProductId, setSellProductId] = useState<string | undefined>(undefined);
 
+  const openAddProduct = useCallback(() => {
+    setEditProduct(null);
+    setFormOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hasAddProductRequest(location.state)) return;
+
+    if (!formOpen) openAddProduct();
+    navigate(`${location.pathname}${location.search}${location.hash}`, {
+      replace: true,
+      state: null,
+    });
+  }, [formOpen, location.hash, location.pathname, location.search, location.state, navigate, openAddProduct]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -27,14 +54,17 @@ export default function Products() {
           <p className="text-sm text-slate-500">Manage products, prices and stock levels.</p>
         </div>
         <Button
-          onClick={() => {
-            setEditProduct(null);
-            setFormOpen(true);
-          }}
+          onClick={openAddProduct}
           data-testid="add-product-btn"
         >
           <Plus className="h-4 w-4" />
           Add Product
+          <span
+            aria-hidden="true"
+            className="ml-1 rounded border border-current/30 px-1 py-0.5 text-[10px] leading-none opacity-0 transition-opacity group-hover/button:opacity-100 group-focus-visible/button:opacity-100"
+          >
+            F2
+          </span>
         </Button>
       </div>
 
@@ -56,10 +86,7 @@ export default function Products() {
         emptyAction={
           <Button
             size="sm"
-            onClick={() => {
-              setEditProduct(null);
-              setFormOpen(true);
-            }}
+            onClick={openAddProduct}
             data-testid="empty-add-product-btn"
           >
             <Plus className="h-4 w-4" />

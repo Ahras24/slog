@@ -2,7 +2,7 @@
 
 export type StockStatus = "in_stock" | "low_stock" | "out_of_stock";
 
-export type StockFilter = "all" | StockStatus;
+export type StockFilter = "all" | "in_stock" | "out_of_stock";
 
 export interface Product {
   id: string;
@@ -54,12 +54,28 @@ export interface Invoice {
   items: InvoiceItem[];
   subtotal: number;
   discount: number;
+  gst_enabled?: boolean;
+  gst_amount?: number;
   round_off: number;
   total: number;
+  total_paid: number;
+  remaining_balance: number;
+  payments: InvoicePayment[];
+  stock_deducted: boolean;
   status: string;
+  finalized_at?: string | null;
   store_phone: string;
   created_at: string;
 }
+
+export interface InvoicePayment {
+  id: string;
+  amount: number;
+  payment_method: PaymentMethod;
+  paid_at: string;
+}
+
+export type InvoiceStatusFilter = "all" | "finalized" | "pending";
 
 export interface InvoiceListResponse {
   invoices: Invoice[];
@@ -84,7 +100,16 @@ export interface InvoiceCreate {
   date?: string;
   payment_method: PaymentMethod;
   discount: number;
+  gst_enabled: boolean;
+  advance_amount: number;
+  request_id: string;
   items: InvoiceCreateItem[];
+}
+
+export interface InvoicePaymentCreate {
+  id: string;
+  amount: number;
+  payment_method: PaymentMethod;
 }
 
 export interface NextInvoiceNumber {

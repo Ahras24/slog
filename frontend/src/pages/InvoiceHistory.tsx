@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Eye, FilePlus2, Printer, Receipt, Search, Trash2 } from "lucide-react";
+import { Eye, FilePlus2, HandCoins, Printer, Receipt, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import EmptyState from "@/components/ui/EmptyState";
@@ -13,11 +15,12 @@ import InvoiceBuilderModal from "@/components/invoices/InvoiceBuilderModal";
 import InvoiceViewModal from "@/components/invoices/InvoiceViewModal";
 import PrintPortal from "@/components/invoices/PrintPortal";
 import { errorMessage } from "@/lib/errors";
-import { deleteInvoice, fetchInvoices, qk } from "@/lib/queries";
+import { addInvoicePayment, deleteInvoice, fetchInvoices, qk } from "@/lib/queries";
 import { formatDateInput, formatDateShort, formatINR } from "@/lib/format";
-import type { Invoice } from "@/lib/types";
+import type { Invoice, InvoicePaymentCreate, InvoiceStatusFilter, PaymentMethod } from "@/lib/types";
 
 const PAGE_SIZE = 10;
+const PAYMENT_METHODS: PaymentMethod[] = ["Cash(S)", "Cash(A)", "Cash(I)", "Cash(Z)", "Cash"];
 
 function pageItems(totalPages: number, currentPage: number): Array<number | "ellipsis"> {
   if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index + 1);
@@ -34,9 +37,14 @@ export default function InvoiceHistory() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
+  const [status, setStatus] = useState<InvoiceStatusFilter>("all");
   const [builderOpen, setBuilderOpen] = useState(false);
+  const [paymentTarget, setPaymentTarget] = useState<Invoice | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | "">("");
+  const [paymentId, setPaymentId] = useState(() => crypto.randomUUID());
 
-  const filters = useMemo(() => ({ search, date_from: from, date_to: to }), [search, from, to]);
+  const filters = useMemo(() => ({ search, date_from: from, date_to: to, status }), [search, from, to, status]);
   const today = formatDateInput();
   const dateRangeValid = (!from || from <= today) && (!to || to <= today) && (!from || !to || from <= to);
   const invoicesQuery = useQuery({
@@ -51,13 +59,53 @@ export default function InvoiceHistory() {
   const [printInvoice, setPrintInvoice] = useState<Invoice | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Invoice | null>(null);
 
+  const paymentValue = Number.parseFloat(paymentAmount);
+  const validPayment = Boolean(
+    paymentTarget &&
+      Number.isFinite(paymentValue) &&
+      paymentValue > 0 &&
+      paymentValue <= paymentTarget.remaining_balance &&
+      paymentMethod
+  );
+  const updatedTotalPaid = paymentTarget
+    ? Math.round((paymentTarget.total_paid + (Number.isFinite(paymentValue) ? paymentValue : 0)) * 100) / 100
+    : 0;
+  const updatedRemaining = paymentTarget
+    ? Math.round((paymentTarget.remaining_balance - (Number.isFinite(paymentValue) ? paymentValue : 0)) * 100) / 100
+    : 0;
+
+  const paymentMutation = useMutation({
+    mutationFn: ({ invoiceId, payment }: { invoiceId: string; payment: InvoicePaymentCreate }) =>
+      addInvoicePayment(invoiceId, payment),
+    onSuccess: async (invoice) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["invoices"], refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: qk.dashboard, refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: ["reports"], refetchType: "all" }),
+      ]);
+      toast.success(
+        invoice.status === "Finalized"
+          ? `Invoice ${invoice.invoice_number} is fully paid and finalized.`
+          : `Payment added to invoice ${invoice.invoice_number}.`
+      );
+      setPaymentTarget(null);
+      setPaymentAmount("");
+      setPaymentMethod("");
+      setPaymentId(crypto.randomUUID());
+    },
+    onError: (error) => toast.error(errorMessage(error, "Could not add the payment.")),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (invoice: Invoice) => deleteInvoice(invoice.id),
     onSuccess: async (_data, invoice) => {
       if (invoices.length === 1 && page > 1) setPage((currentPage) => currentPage - 1);
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["invoices"] }),
-        queryClient.invalidateQueries({ queryKey: qk.dashboard }),
+        queryClient.invalidateQueries({ queryKey: ["invoices"], refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: qk.dashboard, refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: qk.products, refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: ["reports"], refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: qk.nextInvoiceNumber, refetchType: "all" }),
       ]);
       toast.success(`Invoice ${invoice.invoice_number} deleted`);
       setDeleteTarget(null);
@@ -65,14 +113,14 @@ export default function InvoiceHistory() {
     onError: (error) => toast.error(errorMessage(error, "Could not delete the invoice.")),
   });
 
-  const hasFilters = Boolean(search || from || to);
+  const hasFilters = Boolean(search || from || to || status !== "all");
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Invoice History</h1>
-          <p className="text-sm text-slate-500">Every finalized invoice, stored exactly as it was created.</p>
+          <p className="text-sm text-slate-500">View finalized and pending invoices, stored with their payment details.</p>
         </div>
         <Button onClick={() => setBuilderOpen(true)} data-testid="history-create-invoice-btn">
           <FilePlus2 className="h-4 w-4" />
@@ -124,6 +172,25 @@ export default function InvoiceHistory() {
               data-testid="invoice-date-to"
             />
           </div>
+          <div className="grid gap-1">
+            <Label className="text-xs text-slate-500">Status</Label>
+            <Select
+              value={status}
+              onValueChange={(value) => {
+                setStatus(value as InvoiceStatusFilter);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="w-36" data-testid="invoice-status-filter">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="finalized">Finalized</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           {hasFilters ? (
             <Button
               variant="secondary"
@@ -132,6 +199,7 @@ export default function InvoiceHistory() {
                 setSearch("");
                 setFrom("");
                 setTo("");
+                setStatus("all");
                 setPage(1);
               }}
               data-testid="invoice-filters-clear"
@@ -156,7 +224,7 @@ export default function InvoiceHistory() {
             <EmptyState
               icon={Search}
               title="No invoices found"
-              description="No invoices match the current search or date range."
+              description="No invoices match the current search, date range, or status."
               testid="invoices-search-empty-state"
             />
           ) : (
@@ -198,14 +266,43 @@ export default function InvoiceHistory() {
                     <TableCell className="text-right text-slate-700">{invoice.items.length}</TableCell>
                     <TableCell className="text-right font-medium tabular-nums text-slate-900">
                       {formatINR(invoice.total)}
+                      {invoice.status.toLowerCase() === "pending" ? (
+                        <div className="text-xs font-normal text-amber-700">
+                          Balance: {formatINR(invoice.remaining_balance)}
+                        </div>
+                      ) : null}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary" data-testid="invoice-status-badge">
+                      <Badge
+                        variant="secondary"
+                        className={
+                          invoice.status.toLowerCase() === "pending"
+                            ? "border-amber-200 bg-amber-100 text-amber-800"
+                            : "border-emerald-200 bg-emerald-100 text-emerald-800"
+                        }
+                        data-testid="invoice-status-badge"
+                      >
                         {invoice.status}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {invoice.status.toLowerCase() === "pending" ? (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            title="Add payment"
+                            onClick={() => {
+                              setPaymentTarget(invoice);
+                              setPaymentAmount("");
+                              setPaymentMethod("");
+                              setPaymentId(crypto.randomUUID());
+                            }}
+                            data-testid={`add-payment-btn-${invoice.invoice_number}`}
+                          >
+                            <HandCoins className="h-4 w-4" />
+                          </Button>
+                        ) : null}
                         <Button
                           variant="ghost"
                           size="icon-sm"
@@ -289,13 +386,79 @@ export default function InvoiceHistory() {
       </p>
 
       <InvoiceBuilderModal open={builderOpen} onOpenChange={setBuilderOpen} />
+      <Dialog
+        open={Boolean(paymentTarget)}
+        onOpenChange={(open) => {
+          if (!open && !paymentMutation.isPending) setPaymentTarget(null);
+        }}
+      >
+        <DialogContent data-testid="invoice-payment-modal">
+          <DialogHeader>
+            <DialogTitle>Add payment</DialogTitle>
+            <DialogDescription>
+              Record a payment for pending invoice {paymentTarget?.invoice_number}.
+            </DialogDescription>
+          </DialogHeader>
+          {paymentTarget ? (
+            <div className="grid gap-4">
+              <div className="space-y-2 rounded-lg bg-slate-50 p-3 text-sm">
+                <div className="flex justify-between"><span>Invoice Grand Total</span><strong>{formatINR(paymentTarget.total)}</strong></div>
+                <div className="flex justify-between"><span>Previously Paid</span><strong>{formatINR(paymentTarget.total_paid)}</strong></div>
+                <div className="flex justify-between"><span>Remaining Balance</span><strong>{formatINR(paymentTarget.remaining_balance)}</strong></div>
+                <div className="flex justify-between"><span>Updated Total Paid</span><strong data-testid="payment-updated-total">{formatINR(updatedTotalPaid)}</strong></div>
+                <div className="flex justify-between"><span>Updated Remaining Balance</span><strong data-testid="payment-updated-balance">{formatINR(updatedRemaining)}</strong></div>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="invoice-payment-amount">New Payment Amount (₹)</Label>
+                <Input
+                  id="invoice-payment-amount"
+                  type="number"
+                  min={0.01}
+                  max={paymentTarget.remaining_balance}
+                  step="0.01"
+                  value={paymentAmount}
+                  onChange={(event) => setPaymentAmount(event.target.value)}
+                  data-testid="invoice-payment-amount-input"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="invoice-additional-payment-method">Payment Method</Label>
+                <Select
+                  value={paymentMethod}
+                  onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}
+                >
+                  <SelectTrigger id="invoice-additional-payment-method" data-testid="invoice-additional-payment-method">
+                    <SelectValue placeholder="Select payment method" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_METHODS.map((method) => <SelectItem key={method} value={method}>{method}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                onClick={() => {
+                  if (!paymentTarget || !validPayment || !paymentMethod) return;
+                  paymentMutation.mutate({
+                    invoiceId: paymentTarget.id,
+                    payment: { id: paymentId, amount: paymentValue, payment_method: paymentMethod },
+                  });
+                }}
+                disabled={!validPayment || paymentMutation.isPending}
+                data-testid="invoice-payment-submit"
+              >
+                {paymentMutation.isPending ? "Saving payment..." : "Save payment"}
+              </Button>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         onOpenChange={(open) => {
           if (!open) setDeleteTarget(null);
         }}
         title={`Delete invoice ${deleteTarget?.invoice_number ?? ""}?`}
-        description={`This permanently removes the invoice record for ${deleteTarget?.customer_name ?? "this customer"} (${formatINR(deleteTarget?.total ?? 0)}). Stock stays as it is — use Add Stock if the goods came back. This cannot be undone.`}
+        description={`This permanently removes the invoice record for ${deleteTarget?.customer_name ?? "this customer"} (${formatINR(deleteTarget?.total ?? 0)}) and restores the sold quantities to stock. This cannot be undone.`}
         confirmLabel="Delete Invoice"
         destructive
         loading={deleteMutation.isPending}

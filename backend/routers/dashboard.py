@@ -1,5 +1,9 @@
 """Dashboard summary aggregates. "Today" is anchored server-side via lib.dates."""
 
+import os
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
+
 from fastapi import APIRouter
 
 from lib.dates import today_iso
@@ -13,6 +17,12 @@ router = APIRouter(prefix="/dashboard")
 @router.get("", response_model=DashboardSummary)
 async def dashboard_summary():
     today = today_iso()
+    local_today = date.fromisoformat(today)
+    app_tz = ZoneInfo(os.environ.get("APP_TZ", "Asia/Kolkata"))
+    today_start = datetime.combine(local_today, time.min, tzinfo=app_tz).astimezone(timezone.utc)
+    tomorrow_start = datetime.combine(
+        local_today + timedelta(days=1), time.min, tzinfo=app_tz
+    ).astimezone(timezone.utc)
 
     product_rows = await db.products.aggregate(
         [
@@ -39,7 +49,25 @@ async def dashboard_summary():
 
     invoice_rows = await db.invoices.aggregate(
         [
-            {"$match": {"date": today}},
+            {
+                "$match": {
+                    "status": {"$nin": ["Pending", "pending"]},
+                    "$or": [
+                        {"finalized_at": {"$gte": today_start, "$lt": tomorrow_start}},
+                        {
+                            "$and": [
+                                {
+                                    "$or": [
+                                        {"finalized_at": {"$exists": False}},
+                                        {"finalized_at": None},
+                                    ]
+                                },
+                                {"date": today},
+                            ]
+                        },
+                    ],
+                }
+            },
             {
                 "$group": {
                     "_id": None,
